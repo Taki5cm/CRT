@@ -9,6 +9,7 @@ export CLANG_MODULE_CACHE_PATH="$ROOT/.build/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$ROOT/.build/ModuleCache"
 export SWIFTPM_CONFIG_PATH="$ROOT/.swiftpm"
 
+VERSION="v0.1.0"
 APP="$ROOT/build/CRT.app"
 DERIVED="$ROOT/.build/XcodeDerivedData"
 
@@ -27,9 +28,9 @@ ditto "$DERIVED/Build/Products/Release/CRT.app" "$APP"
 xattr -cr "$APP"
 codesign --force --deep --sign - "$APP"
 
-rm -f "$ROOT/build/CRT-Mac-Beta.zip"
-ditto --norsrc --noextattr -c -k --keepParent "$APP" "$ROOT/build/CRT-Mac-Beta.zip"
+rm -f "$ROOT/build/CRT-Mac-Beta-$VERSION.zip"
+ditto --norsrc --noextattr -c -k --keepParent "$APP" "$ROOT/build/CRT-Mac-Beta-$VERSION.zip"
 xattr -cr "$APP"
 
 echo "Built: $APP"
-echo "Zip:   $ROOT/build/CRT-Mac-Beta.zip"
+echo "Zip:   $ROOT/build/CRT-Mac-Beta-$VERSION.zip"

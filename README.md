@@ -2,7 +2,7 @@
   <img src="CRTMac/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="132" alt="CRT app icon">
 </p>
 
-<h1 align="center">CRT</h1>
+<h1 align="center">CRT v0.1 Beta</h1>
 
 <p align="center">
   <strong>Catalyst Rapid-move Tracker</strong><br>
@@ -12,14 +12,14 @@
 <p align="center">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
-  <img alt="Stage" src="https://img.shields.io/badge/stage-functional%20beta-8A63D2">
+  <img alt="Version" src="https://img.shields.io/badge/version-v0.1.0%20beta-8A63D2">
 </p>
 
 ## Overview
 
 `CRT`는 1분, 2분, 5분처럼 짧은 구간에 급격한 상승이 발생했던 미국 주식 후보를 찾고, 그 움직임과 같은 날짜의 공시 또는 시점 주변 뉴스를 함께 확인하는 조사 도구입니다.
 
-현재 버전은 **실시간 매매 신호 앱이 아니라 지난 거래일을 분석하는 기능형 베타**입니다. 사용자는 본인의 무료 데이터 API 키를 입력해 실제 과거 데이터를 조회하며, 결과는 투자 추천이 아닌 조사 출발점으로 제공됩니다.
+현재 표시 버전 `v0.1 Beta` (`0.1.0`)는 **실시간 매매 신호 앱이 아니라 지난 거래일을 분석하는 첫 기능형 베타**입니다. 사용자는 본인의 무료 데이터 API 키를 입력해 실제 과거 데이터를 조회하며, 결과는 투자 추천이 아닌 조사 출발점으로 제공됩니다.
 
 ## What It Does
 
@@ -68,7 +68,7 @@ cd CRTMac
 생성 파일:
 
 - `CRTMac/build/CRT.app`
-- `CRTMac/build/CRT-Mac-Beta.zip`
+- `CRTMac/build/CRT-Mac-Beta-v0.1.0.zip`
 
 현재 배포 파일은 개인 테스트용 ad-hoc 서명 빌드입니다. 일반 사용자에게 경고 없는 설치 경험을 제공하려면 Apple Developer 서명과 공증 절차가 추가로 필요합니다.
 
@@ -136,10 +136,11 @@ npm test
 
 ## Roadmap
 
-- 과거 분석 결과 저장 및 비교 화면
-- 후보별 가격 흐름 차트와 근거 타임라인
-- 데이터 사용권이 확인된 범위에서의 알림 기능 검토
-- 배포용 서명·공증과 온보딩 개선
+| 버전 | 목표 |
+| --- | --- |
+| `v0.1 Beta` (`0.1.0`) | 지난 거래일 급변 후보 감지, 뉴스·공시 연결, macOS 앱 시험 배포 |
+| `v0.2` | 과거 분석 결과 저장, 후보별 가격 흐름과 근거 타임라인 |
+| 이후 검토 | 허용 범위 내 알림 기능, 배포용 서명·공증, 온보딩 개선 |
 
 ## References
 

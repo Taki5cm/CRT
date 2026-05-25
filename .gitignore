@@ -1,0 +1,17 @@
+# macOS and Xcode local files
+.DS_Store
+**/.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+
+# Build output
+CatalystRadarMac/.build/
+CatalystRadarMac/.swiftpm/
+CatalystRadarMac/build/
+node_modules/
+
+# Local secrets and packaged deliveries
+.env
+.env.*
+*.zip

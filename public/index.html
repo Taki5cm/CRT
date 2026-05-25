@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>CRT | 급등 원인 추적 시험판</title>
+    <meta name="description" content="지난 거래일 미국 주식의 급등 후보와 뉴스·SEC 공시를 추적하는 CRT 기능형 베타입니다.">
+    <meta property="og:title" content="CRT | 급등 원인 추적 시험판">
+    <meta property="og:description" content="지난 거래일의 실제 분봉으로 급변 후보와 원인 자료를 확인하는 기능형 베타">
+    <meta name="theme-color" content="#091112">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header class="hero">
+      <div class="brand">CATALYST RADAR <span>FUNCTIONAL BETA</span></div>
+      <h1>갑자기 움직인 종목의<br>이유를 끝까지 추적합니다</h1>
+      <p class="subhead">
+        초단기 급변을 감지하고, 직접 촉매가 보이지 않으면 테마성 동반 움직임을 후속 보고하는 개인용 시험판입니다.
+      </p>
+      <div class="warning">
+        실제 사후 분석은 지난 날짜 데이터만 조회합니다. 분석 결과는 투자 추천 또는 매매 신호가 아닙니다.
+      </div>
+    </header>
+
+    <main>
+      <section class="actual-panel" aria-label="실제 과거 시장 분석">
+        <div class="actual-head">
+          <div>
+            <p class="section-label">FUNCTIONAL BETA</p>
+            <h2>실제 사후 추적 분석</h2>
+            <p>
+              Massive 무료 계정으로 전체시장 후보를 찾고, Alpaca 무료 계정으로 관심종목 뉴스까지
+              확인하며 SEC 당일 공시를 함께 연결합니다.
+            </p>
+          </div>
+          <div class="beta-note">
+            <strong>무료로 실행 가능</strong>
+            <span>API 키는 이 컴퓨터의 분석 요청에만 쓰이며 저장하지 않습니다.</span>
+          </div>
+        </div>
+        <div class="feature-box featured">
+          <div class="feature-title">
+            <h3>전체시장 급변 후보 스캔</h3>
+            <span>Massive 무료 키 필요</span>
+          </div>
+          <p class="feature-copy">
+            지난 날짜의 미국 전체 종목을 확인한 뒤, 움직임이 큰 후보를 1분봉으로 다시 검사하고 SEC 공시를 연결합니다.
+          </p>
+          <form id="scan-form" class="scan-form">
+            <label>
+              Massive API Key
+              <span class="input-wrap wide"><input id="massiveApiKey" name="massiveApiKey" type="password" autocomplete="off" required></span>
+            </label>
+            <label>
+              SEC 연락 이메일
+              <span class="input-wrap wide"><input id="scanSecContact" name="scanSecContact" type="email" placeholder="your@email.com" required></span>
+            </label>
+            <label>
+              분석 날짜 (미국 시간)
+              <span class="input-wrap wide"><input id="scanDate" name="scanDate" type="date" required></span>
+            </label>
+            <button id="scan-market" class="primary" type="submit">전체시장 스캔</button>
+          </form>
+          <p class="analysis-footnote">
+            무료 호출 한도에 맞춰 전체 일별 후보 중 상위 4개를 분봉으로 검사합니다. 속보 뉴스 연결은 아래 관심종목 분석에서 제공합니다.
+          </p>
+          <div id="scan-status" class="analysis-status">Massive 무료 키를 입력하면 실제 전체시장 사후 스캔을 실행할 수 있습니다.</div>
+          <div id="scan-results" class="actual-results"></div>
+        </div>
+        <div class="feature-box">
+          <div class="feature-title">
+            <h3>관심종목 뉴스·공시 확인</h3>
+            <span>Alpaca 무료 키 필요</span>
+          </div>
+          <p class="feature-copy">
+            직접 고른 종목의 실제 분봉을 검사하고, Alpaca 과거 뉴스와 SEC 공시를 함께 붙입니다.
+          </p>
+          <form id="historical-form" class="historical-form">
+          <label>
+            Alpaca API Key
+            <span class="input-wrap wide"><input id="apiKey" name="apiKey" type="password" autocomplete="off" required></span>
+          </label>
+          <label>
+            Alpaca Secret Key
+            <span class="input-wrap wide"><input id="apiSecret" name="apiSecret" type="password" autocomplete="off" required></span>
+          </label>
+          <label>
+            SEC 연락 이메일
+            <span class="input-wrap wide"><input id="secContact" name="secContact" type="email" placeholder="your@email.com" required></span>
+          </label>
+          <label>
+            분석 날짜 (미국 시간)
+            <span class="input-wrap wide"><input id="analysisDate" name="analysisDate" type="date" required></span>
+          </label>
+          <label class="symbols-field">
+            분석 종목 (최대 30개)
+            <span class="input-wrap wide"><input id="symbols" name="symbols" type="text" value="AAPL, NVDA, TSLA, PLTR, IONQ, RGTI, QBTS" required></span>
+          </label>
+          <button id="analyze-history" class="primary" type="submit">실제 데이터 분석</button>
+          </form>
+          <p class="analysis-footnote">
+            최대 30개 입력 종목을 확인합니다. 분봉의 저가-고가 범위로 후보를 찾으므로 당시 진입 가능 가격을 보장하지 않습니다.
+          </p>
+          <div id="analysis-status" class="analysis-status">Alpaca 무료 키를 입력하면 뉴스 포함 사후 분석을 실행할 수 있습니다.</div>
+          <div id="actual-results" class="actual-results"></div>
+        </div>
+      </section>
+
+      <section class="control-panel" aria-label="감지 설정">
+        <div>
+          <p class="section-label">DETECTION RULE</p>
+          <h2>공통 감지 기준</h2>
+        </div>
+        <form id="config-form">
+          <label>
+            시간 창
+            <span class="input-wrap"><input id="windowSeconds" name="windowSeconds" type="number" min="60" max="1800"><small>초</small></span>
+          </label>
+          <label>
+            상승률
+            <span class="input-wrap"><input id="thresholdPct" name="thresholdPct" type="number" step="0.1" min="0.1"><small>% 이상</small></span>
+          </label>
+          <label>
+            최소 가격
+            <span class="input-wrap"><input id="minPrice" name="minPrice" type="number" step="0.01" min="0"><small>USD</small></span>
+          </label>
+          <label>
+            최소 거래대금
+            <span class="input-wrap"><input id="minDollarVolume" name="minDollarVolume" type="number" step="1000" min="0"><small>USD</small></span>
+          </label>
+          <button class="secondary" type="submit">설정 저장</button>
+        </form>
+        <div class="actions">
+          <button id="start-demo" class="secondary">가상 시연 재생</button>
+          <button id="reset" class="ghost">기록 초기화</button>
+        </div>
+      </section>
+
+      <section class="metrics" aria-label="현황">
+        <article>
+          <p>상태</p>
+          <strong id="status">대기 중</strong>
+        </article>
+        <article>
+          <p>수신 시세</p>
+          <strong id="ticks">0</strong>
+        </article>
+        <article>
+          <p>생성 보고</p>
+          <strong id="reports-count">0</strong>
+        </article>
+        <article>
+          <p>현재 조건</p>
+          <strong id="condition">60초 / +10%</strong>
+        </article>
+      </section>
+
+      <section class="reports">
+        <div class="reports-head">
+          <div>
+            <p class="section-label">LIVE INVESTIGATION LOG</p>
+            <h2>가상 시연 보고</h2>
+          </div>
+          <p>화면 흐름을 확인하기 위한 가상 시나리오입니다.</p>
+        </div>
+        <div id="report-list" class="report-list">
+          <div class="empty">데모 시장을 재생하면 보고서가 이곳에 나타납니다.</div>
+        </div>
+      </section>
+
+      <section class="roadmap">
+        <p class="section-label">FROM DEMO TO LIVE</p>
+        <h2>실시간 버전으로 가는 순서</h2>
+        <div class="steps">
+          <article><span>01</span><h3>무료 검증</h3><p>현재 화면에서 감지 기준과 보고 형식을 검증합니다.</p></article>
+          <article><span>02</span><h3>개인 실시간</h3><p>무료 IEX 시세 또는 유료 전체시장 시세를 연결합니다.</p></article>
+          <article><span>03</span><h3>원인 조회</h3><p>SEC 공식 공시와 뉴스 공급자를 연동합니다.</p></article>
+          <article><span>04</span><h3>서비스화</h3><p>데이터 표시 권리와 금융 규제를 확인한 뒤 공개합니다.</p></article>
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <p><strong>CRT Functional Beta</strong> | 위의 사후 분석은 입력한 계정을 통해 지난 날짜의 자료를 조회하며, 아래 가상 시연 영역만 시연용 데이터입니다.</p>
+      <p>분봉 기반 후보 탐색은 당시의 체결 순서나 매수 가능성을 보여주지 않으며, 투자 추천·매매 신호·수익 보장을 제공하지 않습니다.</p>
+    </footer>
+    <script src="./app.js"></script>
+  </body>
+</html>

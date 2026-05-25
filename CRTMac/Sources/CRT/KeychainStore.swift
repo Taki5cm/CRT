@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 final class KeychainStore {
-    private let service = "com.catalystradar.credentials"
+    private let service = "com.taki5cm.crt.credentials"
 
     func value(for account: String) -> String {
         let query: [String: Any] = [

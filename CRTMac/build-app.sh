@@ -13,12 +13,13 @@ APP="$ROOT/build/CRT.app"
 DERIVED="$ROOT/.build/XcodeDerivedData"
 
 xcodebuild \
-  -project "$ROOT/CatalystRadar.xcodeproj" \
-  -scheme CatalystRadar \
+  -project "$ROOT/CRT.xcodeproj" \
+  -scheme CRT \
   -configuration Release \
   -derivedDataPath "$DERIVED" \
   CODE_SIGNING_ALLOWED=NO \
   CLANG_MODULE_CACHE_PATH="$ROOT/.build/ModuleCache" \
+  clean \
   build
 
 rm -rf "$APP"

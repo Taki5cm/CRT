@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10000000000000000000001 /* CatalystRadarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* CatalystRadarApp.swift */; };
+		A10000000000000000000001 /* CRTApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* CRTApp.swift */; };
 		A10000000000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* Models.swift */; };
 		A10000000000000000000003 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* KeychainStore.swift */; };
 		A10000000000000000000004 /* MarketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* MarketService.swift */; };
@@ -17,7 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A20000000000000000000001 /* CatalystRadarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalystRadarApp.swift; sourceTree = "<group>"; };
+		A20000000000000000000001 /* CRTApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CRTApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A20000000000000000000003 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* MarketService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarketService.swift; sourceTree = "<group>"; };
@@ -42,24 +42,24 @@
 		A40000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				A40000000000000000000002 /* CatalystRadar */,
+				A40000000000000000000002 /* CRT */,
 				A20000000000000000000007 /* Info.plist */,
 				A20000000000000000000009 /* Assets.xcassets */,
 				A40000000000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A40000000000000000000002 /* CatalystRadar */ = {
+		A40000000000000000000002 /* CRT */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000001 /* CatalystRadarApp.swift */,
+				A20000000000000000000001 /* CRTApp.swift */,
 				A20000000000000000000002 /* Models.swift */,
 				A20000000000000000000003 /* KeychainStore.swift */,
 				A20000000000000000000004 /* MarketService.swift */,
 				A20000000000000000000005 /* AppModel.swift */,
 				A20000000000000000000006 /* ContentView.swift */,
 			);
-			path = Sources/CatalystRadar;
+			path = Sources/CRT;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000003 /* Products */ = {
@@ -73,9 +73,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A50000000000000000000001 /* CatalystRadar */ = {
+		A50000000000000000000001 /* CRT */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A80000000000000000000002 /* Build configuration list for PBXNativeTarget "CatalystRadar" */;
+			buildConfigurationList = A80000000000000000000002 /* Build configuration list for PBXNativeTarget "CRT" */;
 			buildPhases = (
 				A30000000000000000000002 /* Sources */,
 				A30000000000000000000001 /* Frameworks */,
@@ -85,7 +85,7 @@
 			);
 			dependencies = (
 			);
-			name = CatalystRadar;
+			name = CRT;
 			productName = CRT;
 			productReference = A20000000000000000000008 /* CRT.app */;
 			productType = "com.apple.product-type.application";
@@ -105,7 +105,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXProject "CatalystRadar" */;
+			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXProject "CRT" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = ko;
 			hasScannedForEncodings = 0;
@@ -119,7 +119,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A50000000000000000000001 /* CatalystRadar */,
+				A50000000000000000000001 /* CRT */,
 			);
 		};
 /* End PBXProject section */
@@ -140,7 +140,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000001 /* CatalystRadarApp.swift in Sources */,
+				A10000000000000000000001 /* CRTApp.swift in Sources */,
 				A10000000000000000000002 /* Models.swift in Sources */,
 				A10000000000000000000003 /* KeychainStore.swift in Sources */,
 				A10000000000000000000004 /* MarketService.swift in Sources */,
@@ -182,7 +182,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
-				EXECUTABLE_NAME = CatalystRadar;
+				EXECUTABLE_NAME = CRT;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -191,7 +191,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.catalystradar.macbeta;
+				PRODUCT_BUNDLE_IDENTIFIER = com.taki5cm.crt.beta;
 				PRODUCT_NAME = CRT;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -206,7 +206,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_HARDENED_RUNTIME = YES;
-				EXECUTABLE_NAME = CatalystRadar;
+				EXECUTABLE_NAME = CRT;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -215,7 +215,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.catalystradar.macbeta;
+				PRODUCT_BUNDLE_IDENTIFIER = com.taki5cm.crt.beta;
 				PRODUCT_NAME = CRT;
 				SDKROOT = macosx;
 				SWIFT_VERSION = 5.0;
@@ -225,7 +225,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A80000000000000000000001 /* Build configuration list for PBXProject "CatalystRadar" */ = {
+		A80000000000000000000001 /* Build configuration list for PBXProject "CRT" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A70000000000000000000001 /* Debug */,
@@ -234,7 +234,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A80000000000000000000002 /* Build configuration list for PBXNativeTarget "CatalystRadar" */ = {
+		A80000000000000000000002 /* Build configuration list for PBXNativeTarget "CRT" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A70000000000000000000003 /* Debug */,

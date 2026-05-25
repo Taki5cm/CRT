@@ -3,17 +3,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "CatalystRadar",
+    name: "CRT",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "CatalystRadar", targets: ["CatalystRadar"])
+        .executable(name: "CRT", targets: ["CRT"])
     ],
     targets: [
         .executableTarget(
-            name: "CatalystRadar",
-            path: "Sources/CatalystRadar"
+            name: "CRT",
+            path: "Sources/CRT"
         )
     ]
 )

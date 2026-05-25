@@ -6,9 +6,9 @@ xcuserdata/
 DerivedData/
 
 # Build output
-CatalystRadarMac/.build/
-CatalystRadarMac/.swiftpm/
-CatalystRadarMac/build/
+CRTMac/.build/
+CRTMac/.swiftpm/
+CRTMac/build/
 node_modules/
 
 # Local secrets and packaged deliveries

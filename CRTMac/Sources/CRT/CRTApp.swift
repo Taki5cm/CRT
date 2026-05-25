@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct CatalystRadarApp: App {
+struct CRTApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {

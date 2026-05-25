@@ -16,8 +16,8 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "A50000000000000000000001"
                BuildableName = "CRT.app"
-               BlueprintName = "CatalystRadar"
-               ReferencedContainer = "container:CatalystRadar.xcodeproj">
+               BlueprintName = "CRT"
+               ReferencedContainer = "container:CRT.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -43,8 +43,8 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "A50000000000000000000001"
             BuildableName = "CRT.app"
-            BlueprintName = "CatalystRadar"
-            ReferencedContainer = "container:CatalystRadar.xcodeproj">
+            BlueprintName = "CRT"
+            ReferencedContainer = "container:CRT.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>

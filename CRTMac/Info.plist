@@ -7,9 +7,9 @@
     <key>CFBundleDisplayName</key>
     <string>CRT</string>
     <key>CFBundleExecutable</key>
-    <string>CatalystRadar</string>
+    <string>CRT</string>
     <key>CFBundleIdentifier</key>
-    <string>com.catalystradar.macbeta</string>
+    <string>com.taki5cm.crt.beta</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

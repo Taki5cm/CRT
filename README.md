@@ -1,101 +1,152 @@
-# CRT Prototype
+<p align="center">
+  <img src="CRTMac/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="132" alt="CRT app icon">
+</p>
 
-미국 주식의 짧은 시간 급등을 감지한 뒤, 원인 확인과 후속 분석을 어떻게 보여줄지 검증하는 개인용 시험판입니다.
+<h1 align="center">CRT</h1>
 
-## Mac 앱 버전
+<p align="center">
+  <strong>Catalyst Rapid-move Tracker</strong><br>
+  미국 주식의 급격한 가격 움직임을 사후 탐지하고, 뉴스와 SEC 공시 근거를 연결하는 macOS 리서치 베타
+</p>
 
-비전공자용 첫 Mac 앱을 `CatalystRadarMac` 폴더에 추가했습니다. 이 버전은 브라우저 주소나 로컬 서버를 직접 다루지 않고 일반 앱 창에서 지난 거래일 분석을 실행합니다.
+<p align="center">
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple">
+  <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
+  <img alt="Stage" src="https://img.shields.io/badge/stage-functional%20beta-8A63D2">
+</p>
 
-- 앱 사용 안내: [`CatalystRadarMac/사용방법.md`](CatalystRadarMac/사용방법.md)
-- Xcode에서 직접 수정하기: [`CatalystRadarMac/Xcode에서_수정하기.md`](CatalystRadarMac/Xcode에서_수정하기.md)
-- Xcode 프로젝트: `CatalystRadarMac/CatalystRadar.xcodeproj`
-- 빌드 후 앱 위치: `CatalystRadarMac/build/CRT.app`
-- 전달용 압축 파일: `CatalystRadarMac/build/CRT-Mac-Beta.zip`
+## Overview
 
-앱을 다시 만들려면:
+`CRT`는 1분, 2분, 5분처럼 짧은 구간에 급격한 상승이 발생했던 미국 주식 후보를 찾고, 그 움직임과 같은 날짜의 공시 또는 시점 주변 뉴스를 함께 확인하는 조사 도구입니다.
+
+현재 버전은 **실시간 매매 신호 앱이 아니라 지난 거래일을 분석하는 기능형 베타**입니다. 사용자는 본인의 무료 데이터 API 키를 입력해 실제 과거 데이터를 조회하며, 결과는 투자 추천이 아닌 조사 출발점으로 제공됩니다.
+
+## What It Does
+
+| 기능 | 데이터 소스 | 현재 동작 |
+| --- | --- | --- |
+| 전체시장 급변 후보 스캔 | Massive historical aggregates | 선택한 지난 거래일의 전체시장 일별 후보를 좁힌 후 상위 후보의 1분봉 급변 여부를 검사 |
+| 관심종목 뉴스·공시 분석 | Alpaca bars/news, SEC EDGAR | 최대 30개 관심종목의 분봉 급변을 검사하고 뉴스·당일 공시를 연결 |
+| 공시 원문 확인 | SEC EDGAR | 결과 카드에서 확인된 공시 링크 제공 |
+| 기준 조절 | 로컬 앱 설정 | 시간 창, 상승률, 최소 거래대금 조정 |
+| 자격정보 보관 | macOS Keychain | Mac 앱에서 API 키를 로컬 키체인에 저장 |
+
+## Analysis Flow
+
+```mermaid
+flowchart LR
+    A["지난 거래일 선택"] --> B["급변 기준 설정"]
+    B --> C{"분석 모드"}
+    C --> D["전체시장 후보 탐색<br>Massive"]
+    C --> E["관심종목 검사<br>Alpaca"]
+    D --> F["1분봉 급변 판정"]
+    E --> F
+    F --> G["SEC 공시 및 뉴스 확인"]
+    G --> H["공시 확인 / 뉴스 확인 / 원인 미확인"]
+```
+
+## macOS App
+
+앱은 SwiftUI로 작성된 네이티브 macOS 프로젝트이며 Xcode에서 직접 열어 수정할 수 있습니다.
+
+### Run In Xcode
+
+1. [CRT.xcodeproj](CRTMac/CRT.xcodeproj)을 Xcode로 엽니다.
+2. Xcode 상단 실행 버튼을 누릅니다.
+3. 앱에서 `설정`을 열어 데이터 조회용 키를 입력합니다.
+4. 지난 거래일을 고른 뒤 `전체시장 급변 후보 스캔` 또는 `관심종목 뉴스·공시 분석`을 실행합니다.
+
+처음 사용하는 방법은 [Mac 앱 사용방법](CRTMac/사용방법.md), 직접 화면과 기능을 고치는 방법은 [Xcode에서 수정하기](CRTMac/Xcode에서_수정하기.md)를 참고하세요.
+
+### Build A Shareable Beta
 
 ```bash
-cd CatalystRadarMac
+cd CRTMac
 ./build-app.sh
 ```
 
-현재 기능형 베타는 개인 컴퓨터에서 실행되며, 무료 Massive 또는 Alpaca API 키를 입력하면 하루 이상 지난 미국 주식 분봉과 뉴스·SEC 공시를 분석합니다. 실제 투자 판단이나 매매 신호를 제공하지 않습니다.
+생성 파일:
 
-## 기능형 베타 실행
+- `CRTMac/build/CRT.app`
+- `CRTMac/build/CRT-Mac-Beta.zip`
+
+현재 배포 파일은 개인 테스트용 ad-hoc 서명 빌드입니다. 일반 사용자에게 경고 없는 설치 경험을 제공하려면 Apple Developer 서명과 공증 절차가 추가로 필요합니다.
+
+## Data Requirements
+
+| 목적 | 필요한 항목 | 무료 범위에서의 사용 방식 |
+| --- | --- | --- |
+| 전체시장 사후 후보 탐색 | Massive Stocks Basic API Key | 과거 일별 데이터와 후보별 분봉 확인 |
+| 관심종목 뉴스 포함 조사 | Alpaca API Key / Secret Key | 지난 날짜 분봉 및 과거 뉴스 조회 |
+| 공식 공시 연결 | 연락 이메일 | SEC EDGAR 요청의 사용자 식별용 헤더에 사용 |
+
+2026년 5월 25일 확인 기준, Massive Stocks Basic은 무료 과거 데이터와 분봉 집계를 제공하지만 분당 호출 제한이 있으므로 상세 분봉 확인을 상위 후보 4개로 제한합니다. Alpaca Basic은 최근 15분보다 오래된 SIP 과거 데이터 조회가 가능하므로 본 베타의 사후 분석에 활용합니다.
+
+## Repository Layout
+
+```text
+.
+|-- CRTMac/                        # SwiftUI macOS application
+|   |-- CRT.xcodeproj/             # Xcode project
+|   |-- Resources/                 # CRT app icon assets
+|   `-- Sources/CRT/               # UI, model, keychain, market analysis code
+|-- public/                        # Browser prototype interface
+|-- src/                           # Browser/server analysis modules
+|-- test/                          # Detection and historical scan tests
+|-- docs/                          # Architecture and data/privacy notes
+`-- server.js                      # Local browser prototype server
+```
+
+## Engineering Notes
+
+- 앱은 Massive, Alpaca, SEC를 브라우저 자동검색으로 긁는 방식이 아니라 공식 API 요청으로 연결합니다.
+- 시세 후보 분석이 성공했다면, 뉴스 또는 공시 조회 실패는 경고로 표시하고 분석 결과 자체는 유지합니다.
+- 브라우저 시험판은 입력한 키를 저장하지 않습니다. Mac 앱은 키를 macOS Keychain에 저장합니다.
+- 감지 로직과 외부 응답 연결 흐름은 Node 테스트로 확인할 수 있습니다.
+
+추가 설명:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Data, Privacy and Limitations](docs/DATA_PRIVACY.md)
+
+## Web Prototype
+
+Mac 앱 외에도 기능 검증용 웹 화면이 포함되어 있습니다.
 
 ```bash
 npm start
 ```
 
-브라우저에서 `http://127.0.0.1:4173`을 열고 상단의 `실제 사후 추적 분석`을 사용합니다.
+이후 `http://127.0.0.1:4173`에서 확인할 수 있습니다. 웹 화면 하단의 가상 시연 데이터는 UI 흐름 확인용이며, 상단의 사후 분석 기능은 사용자가 입력한 계정으로 실제 과거 데이터를 요청합니다.
 
-### 전체시장 급변 후보 스캔
-
-- 무료 [Massive](https://massive.com/) Stocks Basic 계정의 API Key
-- SEC 공식 API 접근 표시를 위한 본인 이메일
-- 미국 시간 기준 지난 거래일
-
-이 모드는 전체 미국 종목의 일봉을 조회해 당일 변동폭이 큰 종목을 좁힌 후, 무료 호출 한도 내에서 상위 4개의 실제 1분봉을 검사하고 SEC 당일 공시를 연결합니다.
-
-### 관심종목 뉴스·공시 확인
-
-- 무료 [Alpaca](https://alpaca.markets/) 계정의 API Key와 Secret Key
-- SEC 공식 API 접근 표시를 위한 본인 이메일
-- 미국 시간 기준 지난 거래일과 확인할 티커 최대 30개
-
-이 모드는 직접 고른 종목의 실제 1분봉을 검사하고 Alpaca 과거 뉴스와 SEC 공시를 연결합니다.
-
-`실제 데이터 분석`을 누르면 다음 흐름을 볼 수 있습니다.
-
-- 설정한 시간과 상승률 기준으로 급등 감지
-- 거래대금이 부족한 움직임 제외
-- Massive 전체시장 후보 탐색 및 과거 1분봉 기반 급변 후보 표시
-- Alpaca 관심종목 과거 뉴스가 급변 시점 주변에 있는지 확인
-- SEC 당일 공시 확인 및 원문 링크 제공
-- 직접 공시·뉴스 근거가 발견되지 않은 후보 구분
-
-브라우저 버전은 키를 저장하지 않으며 분석 요청 동안만 사용합니다. Mac 앱 버전은 입력한 키를 해당 Mac의 키체인에 저장합니다. 관심종목 분석은 최대 30개 종목을 조사하며, 전체시장 스캔은 무료 호출 한도에 맞춰 일별 후보 중 상위 4개를 분봉으로 확인합니다.
-
-화면 하단의 가상 시연은 API 키 없이 보고 흐름만 확인하기 위한 예시로 유지되어 있습니다.
-
-## 현재 무료로 작동하는 이유
-
-- Alpaca 공식 문서상 무료 Basic 플랜도 15분보다 오래된 SIP 과거 데이터 조회가 가능합니다.
-- Massive 공식 요금 페이지상 Stocks Basic은 무료이며 전체 미국 종목과 일별·분봉 집계 자료, 분당 5회 API 호출을 제공합니다. 앱은 한 번의 전체시장 스캔을 일별 1회와 상세 후보 최대 4회로 제한합니다.
-- Alpaca는 2015년부터의 과거 뉴스 API를 제공하며 현재 뉴스는 Benzinga 기반입니다. 계정 권한에 따라 뉴스 조회가 제한되면 앱이 경고를 표시하고 시세 후보 분석은 계속합니다.
-- SEC EDGAR API는 인증키 없이 사용할 수 있으며, 조회 시 앱 이름과 연락 이메일을 전송합니다.
-
-## 공개 배포 전에
-
-- 개인용 로컬 앱에서는 사용자가 자신의 API 키로 조회하도록 유지하는 것이 좋습니다.
-- 투자 추천이나 수익 보장처럼 보이는 표현은 사용하지 않습니다.
-- 여러 사용자에게 실제 시세·뉴스 결과를 대신 제공하거나 유료화할 때는 데이터 라이선스와 금융 규제를 별도로 확인합니다.
-
-## 비용 없이 가능한 범위
-
-- 전체시장 일별 후보 탐색 후 상위 4개 분봉 급변 후보 분석
-- 최대 30개 입력 종목의 지난 날짜 급변 후보 분석과 뉴스 확인
-- 급변 후보의 SEC 당일 공시 확인
-- 허용되는 경우 Alpaca 과거 뉴스 연결
-- 감지 규칙, 결과 화면, 분석 방식을 검증
-
-## 실시간 단계에서 필요한 것
-
-미국 전체 종목의 초단기 움직임을 실제로 포착하려면 전체 시장 실시간 데이터가 필요합니다. 무료 IEX 시세는 일부 거래만 보여주므로 제품의 정확도 판단에는 충분하지 않을 수 있습니다.
-
-- 개인 실험: Alpaca 무료 IEX 연결을 추가할 수 있음
-- 실제 전체시장 감시: Alpaca 유료 SIP 또는 Massive 실시간 플랜 검토
-- 뉴스 속보: 사용권이 명확한 뉴스 API 계약 검토
-- 외부 공개 및 유료화: 시세·뉴스 표시 권리와 금융 규제 확인
-
-## 추후 실시간 입력 통로
-
-향후 실시간 버전으로 전환할 때 사용할 서버 입력 통로도 별도로 남겨두었습니다. 이 통로는 정적 공개 데모에서는 사용하지 않습니다.
+## Verification
 
 ```bash
-curl -X POST http://localhost:4173/api/ticks \
-  -H 'Content-Type: application/json' \
-  -d '{"symbol":"TEST","price":2.3,"size":100000,"timestamp":1779700000000,"session":"regular"}'
+npm test
 ```
 
-같은 종목의 기준 가격 틱을 먼저 넣은 뒤, 설정된 시간 내 기준 이상 상승한 가격 틱이 들어오면 보고가 생성됩니다.
+현재 테스트는 급변 감지 조건, 거래대금 필터, 반복 알림 제한, 과거 분봉 후보 감지, 뉴스·공시 연결, 전체시장 후보 선별 흐름을 다룹니다.
+
+## Current Boundaries
+
+- 실시간 전체시장 모니터링 또는 자동매매를 제공하지 않습니다.
+- 뉴스나 공시가 없다는 결과는 매수 판단이나 원인 부재의 증명이 아닙니다.
+- 분봉 고가·저가에 기반한 감지는 실제 체결 가능성을 보장하지 않습니다.
+- 다중 사용자 서비스 또는 유료 제품으로 확장할 때는 데이터 재배포 권한과 관련 규제를 별도로 검토해야 합니다.
+
+## Roadmap
+
+- 과거 분석 결과 저장 및 비교 화면
+- 후보별 가격 흐름 차트와 근거 타임라인
+- 데이터 사용권이 확인된 범위에서의 알림 기능 검토
+- 배포용 서명·공증과 온보딩 개선
+
+## References
+
+- [Massive Stocks Pricing](https://massive.com/pricing?product=stocks)
+- [Alpaca Market Data API](https://docs.alpaca.markets/docs/about-market-data-api)
+- [SEC EDGAR APIs](https://www.sec.gov/search-filings/edgar-application-programming-interfaces)
+
+## Disclaimer
+
+`CRT`는 학습 및 리서치 목적의 프로토타입입니다. 투자자문, 투자권유, 자동매매 서비스가 아니며, 표시된 자료만으로 투자 결정을 내려서는 안 됩니다.

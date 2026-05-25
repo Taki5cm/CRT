@@ -1,8 +1,8 @@
 {
-  "name": "catalyst-radar-mvp",
+  "name": "crt-research-beta",
   "version": "0.1.0",
   "private": true,
-  "description": "Rapid US stock move monitor and catalyst follow-up prototype",
+  "description": "Historical US stock rapid-move research and catalyst follow-up beta",
   "scripts": {
     "start": "node server.js",
     "test": "node --test"

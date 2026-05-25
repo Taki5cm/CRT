@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 Beta
+## CRT 0.1 (build 0.1.0)
 
 초기 기능형 베타입니다.
 

@@ -9,7 +9,7 @@ export CLANG_MODULE_CACHE_PATH="$ROOT/.build/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$ROOT/.build/ModuleCache"
 export SWIFTPM_CONFIG_PATH="$ROOT/.swiftpm"
 
-VERSION="0.1"
+VERSION="0.2"
 APP="$ROOT/build/CRT.app"
 DERIVED="$ROOT/.build/XcodeDerivedData"
 

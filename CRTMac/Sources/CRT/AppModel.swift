@@ -11,6 +11,10 @@ final class AppModel: ObservableObject {
     @Published var statusMessage = "설정에서 무료 API 키를 저장한 뒤 분석을 시작하세요."
     @Published var errorMessage: String?
     @Published var isShowingSettings = false
+    @Published var isShowingDatePicker = false
+    @Published var reportFilter: ReportFilter = .all
+    @Published var notificationsEnabled: Bool
+    @Published var notificationStatus = "알림 상태 확인 중..."
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -19,12 +23,15 @@ final class AppModel: ObservableObject {
 
     private let keychain = KeychainStore()
     private let service = MarketService()
+    private let notificationService = NotificationService()
 
     init() {
+        notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
         massiveKey = keychain.value(for: "massiveKey")
         alpacaKey = keychain.value(for: "alpacaKey")
         alpacaSecret = keychain.value(for: "alpacaSecret")
         secEmail = keychain.value(for: "secEmail")
+        Task { await refreshNotificationStatus() }
     }
 
     var selectedDateString: String {
@@ -36,6 +43,56 @@ final class AppModel: ObservableObject {
             .components(separatedBy: CharacterSet(charactersIn: ", \n\t"))
             .filter { !$0.isEmpty }))
             .sorted()
+    }
+
+    var latestAnalysisDate: Date {
+        AppModel.previousWeekday()
+    }
+
+    func selectDate(_ date: Date) {
+        let adjusted = AppModel.weekday(onOrBefore: min(date, latestAnalysisDate))
+        selectedDate = adjusted
+        if Calendar.current.isDateInWeekend(date) {
+            statusMessage = "주말을 선택해 직전 평일로 조정했습니다. 미국 휴장일은 분석 시 확인됩니다."
+        }
+    }
+
+    func chooseRecentTradingDay(offset: Int) {
+        var date = latestAnalysisDate
+        for _ in 0..<offset {
+            guard let prior = Calendar.current.date(byAdding: .day, value: -1, to: date) else { break }
+            date = AppModel.weekday(onOrBefore: prior)
+        }
+        selectedDate = date
+    }
+
+    func setNotificationsEnabled(_ enabled: Bool) {
+        notificationsEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: "notificationsEnabled")
+        guard enabled else {
+            notificationStatus = "앱 알림 꺼짐"
+            return
+        }
+        requestNotifications()
+    }
+
+    func requestNotifications() {
+        Task {
+            do {
+                let state = try await notificationService.requestPermission()
+                notificationStatus = state.label
+            } catch {
+                notificationStatus = "알림 허용을 완료하지 못했습니다."
+            }
+        }
+    }
+
+    func refreshNotificationStatus() async {
+        guard notificationsEnabled else {
+            notificationStatus = "앱 알림 꺼짐"
+            return
+        }
+        notificationStatus = await notificationService.permissionState().label
     }
 
     func saveCredentials() {
@@ -88,9 +145,13 @@ final class AppModel: ObservableObject {
             defer { isLoading = false }
             do {
                 result = try await operation()
+                reportFilter = .all
                 statusMessage = result?.reports.isEmpty == true
                     ? "선택한 기준에 맞는 급변 후보가 발견되지 않았습니다."
                     : "실제 과거 데이터 분석이 완료되었습니다."
+                if notificationsEnabled, let result {
+                    await notificationService.sendCompletionNotification(for: result)
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 statusMessage = "분석을 완료하지 못했습니다."
@@ -100,6 +161,11 @@ final class AppModel: ObservableObject {
 
     private static func previousWeekday() -> Date {
         var date = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        return weekday(onOrBefore: date)
+    }
+
+    private static func weekday(onOrBefore date: Date) -> Date {
+        var date = date
         while Calendar.current.isDateInWeekend(date) {
             date = Calendar.current.date(byAdding: .day, value: -1, to: date) ?? date
         }

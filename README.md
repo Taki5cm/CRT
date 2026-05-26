@@ -2,7 +2,7 @@
   <img src="CRTMac/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="132" alt="CRT app icon">
 </p>
 
-<h1 align="center">CRT 0.1</h1>
+<h1 align="center">CRT 0.2</h1>
 
 <p align="center">
   <strong>Catalyst Rapid-move Tracker</strong><br>
@@ -12,14 +12,14 @@
 <p align="center">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.1-8A63D2">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2-8A63D2">
 </p>
 
 ## Overview
 
 `CRT`는 1분, 2분, 5분처럼 짧은 구간에 급격한 상승이 발생했던 미국 주식 후보를 찾고, 그 움직임과 같은 날짜의 공시 또는 시점 주변 뉴스를 함께 확인하는 조사 도구입니다.
 
-현재 `CRT 0.1`은 **실시간 매매 신호 앱이 아니라 지난 거래일을 분석하는 첫 기능형 베타**입니다. 사용자는 본인의 무료 데이터 API 키를 입력해 실제 과거 데이터를 조회하며, 결과는 투자 추천이 아닌 조사 출발점으로 제공됩니다. 내부 빌드 버전은 `0.1.0`입니다.
+현재 `CRT 0.2`는 **실시간 매매 신호 앱이 아니라 지난 거래일을 분석하는 기능형 베타**입니다. 사용자는 본인의 무료 데이터 API 키를 입력해 실제 과거 데이터를 조회하며, 결과는 투자 추천이 아닌 조사 출발점으로 제공됩니다. 내부 빌드 버전은 `0.2.0`입니다.
 
 ## What It Does
 
@@ -29,6 +29,9 @@
 | 관심종목 뉴스·공시 분석 | Alpaca bars/news, SEC EDGAR | 최대 30개 관심종목의 분봉 급변을 검사하고 뉴스·당일 공시를 연결 |
 | 공시 원문 확인 | SEC EDGAR | 결과 카드에서 확인된 공시 링크 제공 |
 | 기준 조절 | 로컬 앱 설정 | 시간 창, 상승률, 최소 거래대금 조정 |
+| 편한 날짜 선택 | SwiftUI calendar | 큰 달력, 직전 거래일·1주 전·1개월 전 빠른 선택, 주말 자동 조정 |
+| 결과 필터 | 로컬 화면 | 전체, 공시, 뉴스, 원인 미확인 결과만 골라 표시 |
+| 완료 알림 | macOS Notifications | 사용자가 허용한 경우 수동 분석 완료와 급변 후보 수를 알림 |
 | 자격정보 보관 | macOS Keychain | Mac 앱에서 API 키를 로컬 키체인에 저장 |
 
 ## Analysis Flow
@@ -68,7 +71,7 @@ cd CRTMac
 생성 파일:
 
 - `CRTMac/build/CRT.app`
-- `CRTMac/build/CRT-0.1.zip`
+- `CRTMac/build/CRT-0.2.zip`
 
 현재 배포 파일은 개인 테스트용 ad-hoc 서명 빌드입니다. 일반 사용자에게 경고 없는 설치 경험을 제공하려면 Apple Developer 서명과 공증 절차가 추가로 필요합니다.
 
@@ -102,6 +105,7 @@ cd CRTMac
 - 앱은 Massive, Alpaca, SEC를 브라우저 자동검색으로 긁는 방식이 아니라 공식 API 요청으로 연결합니다.
 - 시세 후보 분석이 성공했다면, 뉴스 또는 공시 조회 실패는 경고로 표시하고 분석 결과 자체는 유지합니다.
 - 브라우저 시험판은 입력한 키를 저장하지 않습니다. Mac 앱은 키를 macOS Keychain에 저장합니다.
+- `CRT 0.2`의 알림은 사용자가 직접 시작한 사후 분석의 완료 알림이며, 실시간 시장 감시 알림은 아닙니다.
 - 감지 로직과 외부 응답 연결 흐름은 Node 테스트로 확인할 수 있습니다.
 
 추가 설명:
@@ -139,8 +143,9 @@ npm test
 | 버전 | 목표 |
 | --- | --- |
 | `CRT 0.1` | 지난 거래일 급변 후보 감지, 뉴스·공시 연결, macOS 앱 시험 배포 |
-| `CRT 0.2` | 과거 분석 결과 저장, 후보별 가격 흐름과 근거 타임라인 |
-| 이후 검토 | 허용 범위 내 알림 기능, 배포용 서명·공증, 온보딩 개선 |
+| `CRT 0.2` | 달력형 날짜 선택, 빠른 거래일 이동, 결과 필터, 분석 완료 Mac 알림 |
+| 다음 단계 | 분석 결과 저장, 가격 흐름·근거 타임라인, 실시간 데이터 가능성 검토 |
+| 이후 검토 | 배포용 서명·공증과 온보딩 개선 |
 
 ## References
 

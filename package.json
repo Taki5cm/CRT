@@ -1,6 +1,6 @@
 {
   "name": "crt-research-beta",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Historical US stock rapid-move research and catalyst follow-up beta",
   "scripts": {

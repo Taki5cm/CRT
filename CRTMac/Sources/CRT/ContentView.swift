@@ -23,7 +23,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.isShowingSettings) {
             SettingsView()
                 .environmentObject(model)
-                .frame(width: 560, height: 390)
+                .frame(width: 580, height: 475)
+        }
+        .sheet(isPresented: $model.isShowingDatePicker) {
+            TradingDatePickerView()
+                .environmentObject(model)
+                .frame(width: 480, height: 500)
         }
         .alert("확인 필요", isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -42,7 +47,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.1")
+                Text("0.2")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -63,8 +68,18 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 HStack(spacing: 16) {
                     LabeledContent("분석 날짜") {
-                        DatePicker("", selection: $model.selectedDate, in: ...Date(), displayedComponents: .date)
-                            .labelsHidden()
+                        Button {
+                            model.isShowingDatePicker = true
+                        } label: {
+                            HStack(spacing: 7) {
+                                Image(systemName: "calendar")
+                                Text(DateFormatter.selectedDate.string(from: model.selectedDate))
+                                Image(systemName: "chevron.down")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.bordered)
                     }
                     LabeledContent("시간 창") {
                         Picker("", selection: $model.rules.windowMinutes) {
@@ -165,6 +180,15 @@ struct ContentView: View {
                     Metric(title: "확인 분봉", value: "\(result.minuteBarsChecked)")
                     Metric(title: "급변 후보", value: "\(result.reports.count)")
                 }
+                if !result.reports.isEmpty {
+                    Picker("결과 필터", selection: $model.reportFilter) {
+                        ForEach(ReportFilter.allCases) { filter in
+                            Text(filter.label).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 420)
+                }
                 Text(result.methodology)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -173,10 +197,15 @@ struct ContentView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
+                let filteredReports = result.reports.filter(model.reportFilter.includes)
                 if result.reports.isEmpty {
                     emptyResult
+                } else if filteredReports.isEmpty {
+                    Text("선택한 분류에 해당하는 후보가 없습니다.")
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 24)
                 } else {
-                    ForEach(result.reports) { ReportCard(report: $0) }
+                    ForEach(filteredReports) { ReportCard(report: $0) }
                 }
             }
         } else {
@@ -193,6 +222,54 @@ struct ContentView: View {
                 Text("분석을 실행하면 실제 과거 데이터 결과가 여기에 나타납니다.")
                     .foregroundStyle(.secondary)
             }
+    }
+}
+
+private struct TradingDatePickerView: View {
+    @EnvironmentObject private var model: AppModel
+
+    private var selection: Binding<Date> {
+        Binding(
+            get: { model.selectedDate },
+            set: { model.selectDate($0) }
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("분석 날짜 선택")
+                .font(.title2.bold())
+            Text("지난 미국 거래일을 선택하세요. 주말을 고르면 직전 평일로 자동 조정됩니다.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            DatePicker(
+                "분석 날짜",
+                selection: selection,
+                in: ...model.latestAnalysisDate,
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .frame(maxWidth: .infinity)
+
+            HStack(spacing: 8) {
+                Button("직전 거래일") { model.chooseRecentTradingDay(offset: 0) }
+                Button("1주 전") { model.chooseRecentTradingDay(offset: 5) }
+                Button("1개월 전") { model.chooseRecentTradingDay(offset: 20) }
+            }
+            .buttonStyle(.bordered)
+
+            HStack {
+                Text("선택됨: \(DateFormatter.selectedDate.string(from: model.selectedDate))")
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("적용") { model.isShowingDatePicker = false }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(24)
+        .preferredColorScheme(.dark)
     }
 }
 
@@ -289,6 +366,22 @@ struct SettingsView: View {
                 TextField("SEC 조회용 이메일", text: $model.secEmail)
             }
             .textFieldStyle(.roundedBorder)
+            Divider()
+            Toggle("분석이 끝나면 Mac 알림 받기", isOn: Binding(
+                get: { model.notificationsEnabled },
+                set: { model.setNotificationsEnabled($0) }
+            ))
+            HStack {
+                Text(model.notificationStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if model.notificationsEnabled {
+                    Button("알림 권한 요청") { model.requestNotifications() }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
             HStack {
                 Text("키는 외부 서버에 저장하지 않습니다.")
                     .font(.caption)
@@ -304,6 +397,14 @@ struct SettingsView: View {
 }
 
 private extension DateFormatter {
+    static let selectedDate: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "yyyy년 M월 d일 (E)"
+        return formatter
+    }()
+
     static let displayEastern: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")

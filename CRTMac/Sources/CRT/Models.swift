@@ -74,6 +74,37 @@ struct AnalysisResult {
     let methodology: String
 }
 
+enum ReportFilter: String, CaseIterable, Identifiable {
+    case all
+    case filing
+    case news
+    case unexplained
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .all: return "전체"
+        case .filing: return "공시"
+        case .news: return "뉴스"
+        case .unexplained: return "원인 미확인"
+        }
+    }
+
+    func includes(_ report: AnalysisReport) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .filing:
+            return report.classification == .filingFound
+        case .news:
+            return report.classification == .newsFound
+        case .unexplained:
+            return report.classification == .unexplained
+        }
+    }
+}
+
 enum AnalysisError: LocalizedError {
     case missingCredential(String)
     case invalidInput(String)

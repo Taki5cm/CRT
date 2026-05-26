@@ -12,6 +12,7 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 | App state | `AppModel.swift` | 사용자 입력, 로딩 상태, 서비스 호출 관리 |
 | Analysis service | `CRTMac/Sources/CRT/MarketService.swift` | 외부 API 호출, 급변 감지, 근거 결합 |
 | Credential storage | `CRTMac/Sources/CRT/KeychainStore.swift` | API 키의 로컬 키체인 저장 |
+| Notifications | `CRTMac/Sources/CRT/NotificationService.swift` | 사용자가 허용한 분석 완료 로컬 알림 전달 |
 | Browser prototype | Node.js + static UI | 기능 흐름과 API 동작의 보조 검증 |
 | Automated tests | Node test runner | 핵심 감지 및 결합 로직 회귀 검사 |
 
@@ -24,6 +25,7 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 3. 무료 호출 한도에 맞춰 상위 후보 최대 4개의 1분봉을 가져옵니다.
 4. 선택한 시간 창 안의 상승률과 거래대금 조건을 만족하는 움직임을 감지합니다.
 5. 감지된 종목에 대해 SEC 당일 공시를 확인합니다.
+6. 사용자가 알림을 켠 경우 분석 완료와 후보 수를 Mac 알림으로 표시합니다.
 
 ### Watchlist Analysis
 
@@ -31,6 +33,13 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 2. Alpaca에서 지난 날짜의 1분봉을 조회합니다.
 3. 급변 후보에 대해 과거 뉴스 및 SEC 공시를 조회합니다.
 4. 근거에 따라 `공시 확인`, `뉴스 확인`, `원인 미확인`으로 표시합니다.
+
+## Interaction Improvements In 0.2
+
+- 작은 날짜 입력 대신 그래픽 달력 패널과 최근 거래일 바로가기를 제공합니다.
+- 주말 선택은 직전 평일로 보정하며, 실제 미국 휴장 여부는 외부 데이터 조회 결과에 맡깁니다.
+- 결과는 공시·뉴스·원인 미확인 분류별로 필터링할 수 있습니다.
+- 로컬 알림은 자동 감시가 아닌 사용자가 실행한 분석 완료에만 연결됩니다.
 
 ## Design Decisions
 

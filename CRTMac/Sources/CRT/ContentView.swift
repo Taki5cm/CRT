@@ -10,11 +10,8 @@ struct ContentView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
-                    controls
-                    actions
-                    status
                     liveQuotes
-                    results
+                    historicalAnalysis
                 }
                 .padding(28)
                 .frame(maxWidth: 1120)
@@ -48,7 +45,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.3")
+                Text("0.4")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -56,12 +53,31 @@ struct ContentView: View {
                     .padding(.vertical, 6)
                     .overlay(Capsule().stroke(.secondary.opacity(0.5)))
             }
-            Text("실시간 급등을 포착하고\n근거를 추적합니다")
+            Text("시장을 계속 감시하고\n급등 순간을 포착합니다")
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .tracking(-1.5)
-            Text("사용자 본인의 데이터 연결로 작동하는 개인용 스캐너 베타입니다. 감지 결과는 매수 추천이나 자동매매 신호가 아닙니다.")
+            Text("감시 시작 후 중지할 때까지 체결 흐름을 확인합니다. 감지 결과는 매수 추천이나 자동매매 신호가 아닙니다.")
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var historicalAnalysis: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("사후 분석")
+                    .font(.title3.bold())
+                Text("지난 날짜의 자료를 한 번 조회해 움직임과 근거를 돌아보는 기능입니다. 실시간 감시와는 별도로 실행됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            controls
+            actions
+            status
+            results
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 14).fill(.white.opacity(0.022)))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.07)))
     }
 
     private var controls: some View {
@@ -118,7 +134,7 @@ struct ContentView: View {
             }
             .padding(10)
         } label: {
-            Text("분석 조건")
+            Text("지난 날짜 분석 조건")
         }
     }
 
@@ -127,7 +143,7 @@ struct ContentView: View {
             Button {
                 model.scanWholeMarket()
             } label: {
-                Label("전체시장 급변 후보 스캔", systemImage: "waveform.path.ecg.magnifyingglass")
+                Label("1회 분석: 전체시장 후보", systemImage: "waveform.path.ecg.magnifyingglass")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
@@ -138,7 +154,7 @@ struct ContentView: View {
             Button {
                 model.analyzeWatchlist()
             } label: {
-                Label("관심종목 뉴스·공시 분석", systemImage: "newspaper")
+                Label("1회 분석: 관심종목 근거", systemImage: "newspaper")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
@@ -174,40 +190,71 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("실시간 급등 감지")
-                            .font(.headline)
-                        Text("가격 경보를 먼저 표시하고, 뉴스·공시 원인 확인은 후속 분석으로 진행합니다.")
+                        Text("시장 감시")
+                            .font(.title3.bold())
+                        Text("시작하면 연결을 유지하며 조건에 맞는 급등 후보가 나올 때까지 계속 작동합니다.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     if model.isLiveRunning {
-                        Button("중지") { model.stopLiveQuotes() }
+                        Button("감시 중지") { model.stopLiveQuotes() }
                             .buttonStyle(.bordered)
                     } else {
-                        Button("감지 시작") { model.startLiveQuotes() }
+                        Button("시장 감시 시작") { model.startLiveQuotes() }
                             .buttonStyle(.borderedProminent)
                     }
                 }
 
-                HStack(spacing: 16) {
-                    LabeledContent("데이터 범위") {
-                        Picker("", selection: $model.liveFeed) {
-                            ForEach(LiveDataFeed.allCases) { feed in
-                                Text(feed.label).tag(feed)
-                            }
-                        }
-                        .labelsHidden()
-                        .frame(width: 165)
-                        .disabled(model.isLiveRunning)
+                Picker("감시 모드", selection: $model.liveMonitoringMode) {
+                    ForEach(LiveMonitoringMode.allCases) { mode in
+                        Text(mode.label).tag(mode)
                     }
-                    Toggle("전체 상장주 감지", isOn: $model.scanAllLiveMarket)
-                        .disabled(model.isLiveRunning || model.liveFeed != .sip)
-                    Spacer()
                 }
-                Text(model.liveFeed.explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .pickerStyle(.segmented)
+                .disabled(model.isLiveRunning)
+
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.liveMonitoringMode.title)
+                            .font(.subheadline.bold())
+                        Text(model.liveMonitoringMode.explanation)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if model.isLiveRunning, let startedAt = model.liveStartedAt {
+                        TimelineView(.periodic(from: .now, by: 1)) { context in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(.green)
+                                    .frame(width: 8, height: 8)
+                                Text("감시 실행 중")
+                                    .fontWeight(.semibold)
+                                Text(context.date.timeIntervalSince(startedAt).elapsedString)
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                            }
+                            .font(.caption)
+                        }
+                    }
+                }
+
+                if !model.liveMonitoringMode.scansAllSymbols {
+                    HStack {
+                        Text("감시할 관심종목")
+                            .foregroundStyle(.secondary)
+                        TextField("AAPL, NVDA, TSLA", text: $model.watchlistText)
+                            .disabled(model.isLiveRunning)
+                        Text("최대 30개")
+                            .foregroundStyle(.secondary)
+                            .font(.caption)
+                    }
+                } else {
+                    Text("이 모드는 Alpaca SIP 유료 권한이 없는 계정에서는 연결되지 않습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
 
                 HStack(spacing: 18) {
                     LabeledContent("감지 시간") {
@@ -240,6 +287,15 @@ struct ContentView: View {
                                 .frame(width: 100)
                         }
                     }
+                    LabeledContent("재알림 제한") {
+                        Picker("", selection: $model.liveRules.cooldownSeconds) {
+                            Text("1분").tag(60)
+                            Text("5분").tag(300)
+                            Text("15분").tag(900)
+                        }
+                        .labelsHidden()
+                        .frame(width: 72)
+                    }
                 }
                 .disabled(model.isLiveRunning)
                 Text(model.liveStatusMessage)
@@ -263,7 +319,7 @@ struct ContentView: View {
                     }
                 }
 
-                if model.scanAllLiveMarket, model.isLiveRunning {
+                if model.liveMonitoringMode.scansAllSymbols, model.isLiveRunning {
                     Text("전체시장 모드는 수신량이 많아 일반 체결을 화면에 계속 표시하지 않고, 조건을 충족한 감지 로그만 갱신합니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -287,11 +343,6 @@ struct ContentView: View {
                 }
             }
             .padding(10)
-        }
-        .onChange(of: model.liveFeed) { _, newFeed in
-            if newFeed == .iex {
-                model.scanAllLiveMarket = false
-            }
         }
     }
 
@@ -459,6 +510,9 @@ private struct LiveAlertCard: View {
                 .monospacedDigit()
             Text("거래대금 $\(alert.dollarVolume.formatted(.number.notation(.compactName)))")
                 .foregroundStyle(.secondary)
+            Text(alert.feed == .iex ? "IEX" : "SIP")
+                .font(.caption.bold())
+                .foregroundStyle(.secondary)
             Spacer()
             Text(DateFormatter.liveTime.string(from: alert.detectedAt))
                 .font(.caption)
@@ -553,7 +607,7 @@ struct SettingsView: View {
             }
             .textFieldStyle(.roundedBorder)
             Divider()
-            Toggle("분석이 끝나면 Mac 알림 받기", isOn: Binding(
+            Toggle("급등 포착 및 분석 완료 알림 받기", isOn: Binding(
                 get: { model.notificationsEnabled },
                 set: { model.setNotificationsEnabled($0) }
             ))
@@ -613,4 +667,17 @@ private extension DateFormatter {
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
+}
+
+private extension TimeInterval {
+    var elapsedString: String {
+        let seconds = max(0, Int(self))
+        let hours = seconds / 3600
+        let minutes = (seconds % 3600) / 60
+        let remainder = seconds % 60
+        if hours > 0 {
+            return String(format: "%02d:%02d:%02d", hours, minutes, remainder)
+        }
+        return String(format: "%02d:%02d", minutes, remainder)
+    }
 }

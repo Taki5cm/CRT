@@ -6,6 +6,10 @@ final class LiveQuoteService {
     private var allSymbols = false
     private var feed: LiveDataFeed = .iex
     private var rules = LiveScanRules()
+    private var key = ""
+    private var secret = ""
+    private var shouldStayConnected = false
+    private var reconnectWorkItem: DispatchWorkItem?
     private var onTrade: ((LiveTrade) -> Void)?
     private var onAlert: ((LiveAlert) -> Void)?
     private var onStatus: ((String, Bool) -> Void)?
@@ -28,6 +32,8 @@ final class LiveQuoteService {
         onStatus: @escaping (String, Bool) -> Void
     ) {
         disconnect()
+        self.key = key
+        self.secret = secret
         requestedSymbols = allSymbols ? ["*"] : symbols
         self.allSymbols = allSymbols
         self.feed = feed
@@ -36,9 +42,13 @@ final class LiveQuoteService {
         self.onAlert = onAlert
         self.onStatus = onStatus
         detector.reset()
+        shouldStayConnected = true
+        openConnection()
+    }
 
+    private func openConnection() {
         guard let url = URL(string: "wss://stream.data.alpaca.markets/v2/\(feed.rawValue)") else {
-            onStatus("실시간 연결 주소를 만들지 못했습니다.", false)
+            onStatus?("실시간 연결 주소를 만들지 못했습니다.", false)
             return
         }
         let webSocket = URLSession.shared.webSocketTask(with: url)
@@ -49,6 +59,9 @@ final class LiveQuoteService {
     }
 
     func disconnect() {
+        shouldStayConnected = false
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
     }
@@ -63,7 +76,7 @@ final class LiveQuoteService {
               let text = String(data: data, encoding: .utf8) else { return }
         task.send(.string(text)) { [weak self] error in
             if error != nil {
-                self?.onStatus?("Alpaca 실시간 연결에 메시지를 보내지 못했습니다.", false)
+                self?.scheduleReconnect()
             }
         }
     }
@@ -74,8 +87,7 @@ final class LiveQuoteService {
             guard let self, self.task != nil else { return }
             switch result {
             case .failure:
-                self.onStatus?("Alpaca 실시간 연결이 끊어졌습니다. 다시 연결해주세요.", false)
-                self.disconnect()
+                self.scheduleReconnect()
             case .success(let message):
                 let data: Data?
                 switch message {
@@ -119,12 +131,28 @@ final class LiveQuoteService {
                 }
             case "error":
                 let message = packet.message ?? "알 수 없는 오류"
+                shouldStayConnected = false
                 onStatus?("Alpaca 실시간 연결 실패: \(message). 키 또는 선택한 피드 구독 권한을 확인해주세요.", false)
                 disconnect()
             default:
                 continue
             }
         }
+    }
+
+    private func scheduleReconnect() {
+        guard shouldStayConnected, reconnectWorkItem == nil else { return }
+        task?.cancel(with: .goingAway, reason: nil)
+        task = nil
+        onStatus?("연결이 끊어졌습니다. 3초 후 시장 감시를 자동으로 다시 연결합니다...", true)
+        let item = DispatchWorkItem { [weak self] in
+            guard let self, self.shouldStayConnected else { return }
+            self.reconnectWorkItem = nil
+            self.onStatus?("시장 감시를 다시 연결하고 있습니다...", true)
+            self.openConnection()
+        }
+        reconnectWorkItem = item
+        DispatchQueue.global().asyncAfter(deadline: .now() + 3, execute: item)
     }
 }
 

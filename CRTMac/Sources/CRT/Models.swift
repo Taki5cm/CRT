@@ -81,6 +81,47 @@ enum LiveDataFeed: String, CaseIterable, Identifiable {
     }
 }
 
+enum LiveMonitoringMode: String, CaseIterable, Identifiable {
+    case watchlistIEX
+    case wholeMarketSIP
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .watchlistIEX: return "관심종목 감시"
+        case .wholeMarketSIP: return "전체시장 감시"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .watchlistIEX: return "관심종목 · 무료 IEX"
+        case .wholeMarketSIP: return "전체시장 · 유료 SIP"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .watchlistIEX:
+            return "무료 시험 모드입니다. 입력한 관심종목 최대 30개를 앱이 꺼질 때까지 계속 감시합니다."
+        case .wholeMarketSIP:
+            return "실전 검증용 모드입니다. 본인의 Alpaca SIP 권한으로 전체 상장주 체결을 계속 감시합니다."
+        }
+    }
+
+    var feed: LiveDataFeed {
+        switch self {
+        case .watchlistIEX: return .iex
+        case .wholeMarketSIP: return .sip
+        }
+    }
+
+    var scansAllSymbols: Bool {
+        self == .wholeMarketSIP
+    }
+}
+
 struct LiveScanRules {
     var windowSeconds: Int = 2
     var thresholdPercent: Double = 10

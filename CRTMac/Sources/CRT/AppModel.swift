@@ -18,11 +18,15 @@ final class AppModel: ObservableObject {
     @Published var notificationStatus = "알림 상태 확인 중..."
     @Published var liveTrades: [LiveTrade] = []
     @Published var isLiveRunning = false
-    @Published var liveStatusMessage = "Alpaca 키를 입력하면 실시간 급등 감지를 시험할 수 있습니다."
-    @Published var liveFeed: LiveDataFeed = .iex
-    @Published var scanAllLiveMarket = false
+    @Published var liveStatusMessage = "모드를 선택하고 시장 감시를 시작하세요."
+    @Published var liveMonitoringMode: LiveMonitoringMode {
+        didSet {
+            UserDefaults.standard.set(liveMonitoringMode.rawValue, forKey: "liveMonitoringMode")
+        }
+    }
     @Published var liveRules = LiveScanRules()
     @Published var liveAlerts: [LiveAlert] = []
+    @Published var liveStartedAt: Date?
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -36,6 +40,9 @@ final class AppModel: ObservableObject {
 
     init() {
         notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
+        liveMonitoringMode = LiveMonitoringMode(
+            rawValue: UserDefaults.standard.string(forKey: "liveMonitoringMode") ?? ""
+        ) ?? .watchlistIEX
         dateInputText = DateFormatter.easternDate.string(from: selectedDate)
         massiveKey = keychain.value(for: "massiveKey")
         alpacaKey = keychain.value(for: "alpacaKey")
@@ -173,11 +180,7 @@ final class AppModel: ObservableObject {
             errorMessage = "설정에서 Alpaca API Key와 Secret Key를 먼저 입력해주세요."
             return
         }
-        if scanAllLiveMarket, liveFeed != .sip {
-            errorMessage = "전체 상장주 실시간 감지는 유료 SIP 피드를 선택해야 합니다. 무료 IEX에서는 관심종목 감지를 사용해주세요."
-            return
-        }
-        if !scanAllLiveMarket {
+        if !liveMonitoringMode.scansAllSymbols {
             guard !watchlist.isEmpty, watchlist.count <= 30 else {
                 errorMessage = "관심종목 실시간 감지는 1개 이상 30개 이하로 입력해주세요."
                 return
@@ -187,13 +190,14 @@ final class AppModel: ObservableObject {
         liveTrades = []
         liveAlerts = []
         isLiveRunning = true
-        liveStatusMessage = "Alpaca \(liveFeed.label) 피드에 연결하고 있습니다..."
+        liveStartedAt = Date()
+        liveStatusMessage = "\(liveMonitoringMode.label) 연결을 시작하고 있습니다..."
         liveQuoteService.connect(
             key: key,
             secret: secret,
-            feed: liveFeed,
+            feed: liveMonitoringMode.feed,
             symbols: watchlist,
-            allSymbols: scanAllLiveMarket,
+            allSymbols: liveMonitoringMode.scansAllSymbols,
             rules: liveRules
         ) { [weak self] trade in
             Task { @MainActor in
@@ -223,7 +227,8 @@ final class AppModel: ObservableObject {
     func stopLiveQuotes() {
         liveQuoteService.disconnect()
         isLiveRunning = false
-        liveStatusMessage = "실시간 급등 감지를 중지했습니다."
+        liveStartedAt = nil
+        liveStatusMessage = "시장 감시를 중지했습니다."
     }
 
     func clearLiveAlerts() {
@@ -258,7 +263,7 @@ final class AppModel: ObservableObject {
     }
 
     private static func previousWeekday() -> Date {
-        var date = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        let date = Calendar.current.date(byAdding: .day, value: -1, to: Date()) ?? Date()
         return weekday(onOrBefore: date)
     }
 

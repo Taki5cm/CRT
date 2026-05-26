@@ -303,6 +303,15 @@ actor MarketService {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if name.hasPrefix("Massive"), status == 401 {
+                throw AnalysisError.remote("Massive API Key 인증에 실패했습니다. 설정에 Massive Stocks에서 발급받은 API Key를 다시 입력하고 저장한 뒤 재시도해주세요. Alpaca 키나 Massive 로그인 비밀번호는 사용할 수 없습니다.")
+            }
+            if name.hasPrefix("Massive"), status == 429 {
+                throw AnalysisError.remote("Massive 무료 호출 횟수를 잠시 초과했습니다. 1분 뒤 다시 스캔해주세요.")
+            }
+            if name.hasPrefix("Massive"), status == 403 {
+                throw AnalysisError.remote("Massive 계정에서 이 자료에 접근할 수 없습니다. Stocks 플랜과 API Key 권한을 확인해주세요.")
+            }
             throw AnalysisError.remote("\(name) 조회에 실패했습니다. 상태 코드: \(status)")
         }
         do {

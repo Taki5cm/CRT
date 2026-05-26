@@ -12,9 +12,13 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var isShowingSettings = false
     @Published var isShowingDatePicker = false
+    @Published var dateInputText = ""
     @Published var reportFilter: ReportFilter = .all
     @Published var notificationsEnabled: Bool
     @Published var notificationStatus = "알림 상태 확인 중..."
+    @Published var liveTrades: [LiveTrade] = []
+    @Published var isLiveRunning = false
+    @Published var liveStatusMessage = "Alpaca 키를 입력하면 관심종목 현재 가격을 확인할 수 있습니다."
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -24,9 +28,11 @@ final class AppModel: ObservableObject {
     private let keychain = KeychainStore()
     private let service = MarketService()
     private let notificationService = NotificationService()
+    private let liveQuoteService = LiveQuoteService()
 
     init() {
         notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
+        dateInputText = DateFormatter.easternDate.string(from: selectedDate)
         massiveKey = keychain.value(for: "massiveKey")
         alpacaKey = keychain.value(for: "alpacaKey")
         alpacaSecret = keychain.value(for: "alpacaSecret")
@@ -52,6 +58,7 @@ final class AppModel: ObservableObject {
     func selectDate(_ date: Date) {
         let adjusted = AppModel.weekday(onOrBefore: min(date, latestAnalysisDate))
         selectedDate = adjusted
+        dateInputText = DateFormatter.easternDate.string(from: adjusted)
         if Calendar.current.isDateInWeekend(date) {
             statusMessage = "주말을 선택해 직전 평일로 조정했습니다. 미국 휴장일은 분석 시 확인됩니다."
         }
@@ -63,7 +70,30 @@ final class AppModel: ObservableObject {
             guard let prior = Calendar.current.date(byAdding: .day, value: -1, to: date) else { break }
             date = AppModel.weekday(onOrBefore: prior)
         }
-        selectedDate = date
+        selectDate(date)
+    }
+
+    func applyTypedDate() {
+        let input = dateInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let formats = ["yyyy-MM-dd", "yyyy/MM/dd", "yyyy.MM.dd"]
+        for format in formats {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "America/New_York")
+            formatter.dateFormat = format
+            formatter.isLenient = false
+            if let date = formatter.date(from: input) {
+                errorMessage = nil
+                selectDate(date)
+                return
+            }
+        }
+        errorMessage = "날짜는 2026-05-22 형식으로 입력해주세요."
+    }
+
+    func shiftSelectedYear(by years: Int) {
+        guard let shifted = Calendar.current.date(byAdding: .year, value: years, to: selectedDate) else { return }
+        selectDate(shifted)
     }
 
     func setNotificationsEnabled(_ enabled: Bool) {
@@ -130,6 +160,42 @@ final class AppModel: ObservableObject {
                 rules: rules
             )
         }
+    }
+
+    func startLiveQuotes() {
+        let key = alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secret = alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty, !secret.isEmpty else {
+            errorMessage = "설정에서 Alpaca API Key와 Secret Key를 먼저 입력해주세요."
+            return
+        }
+        guard !watchlist.isEmpty, watchlist.count <= 30 else {
+            errorMessage = "실시간 미리보기 관심종목은 1개 이상 30개 이하로 입력해주세요."
+            return
+        }
+        errorMessage = nil
+        liveTrades = []
+        isLiveRunning = true
+        liveStatusMessage = "Alpaca IEX 실시간 피드에 연결하고 있습니다..."
+        liveQuoteService.connect(key: key, secret: secret, symbols: watchlist) { [weak self] trade in
+            Task { @MainActor in
+                guard let self else { return }
+                self.liveTrades.removeAll { $0.symbol == trade.symbol }
+                self.liveTrades.append(trade)
+                self.liveTrades.sort { $0.symbol < $1.symbol }
+            }
+        } onStatus: { [weak self] status, isConnected in
+            Task { @MainActor in
+                self?.liveStatusMessage = status
+                self?.isLiveRunning = isConnected
+            }
+        }
+    }
+
+    func stopLiveQuotes() {
+        liveQuoteService.disconnect()
+        isLiveRunning = false
+        liveStatusMessage = "실시간 가격 미리보기를 중지했습니다."
     }
 
     private func beginAnalysis(message: String, operation: @escaping () async throws -> AnalysisResult) {

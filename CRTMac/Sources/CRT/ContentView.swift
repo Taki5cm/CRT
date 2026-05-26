@@ -13,6 +13,7 @@ struct ContentView: View {
                     controls
                     actions
                     status
+                    liveQuotes
                     results
                 }
                 .padding(28)
@@ -23,12 +24,12 @@ struct ContentView: View {
         .sheet(isPresented: $model.isShowingSettings) {
             SettingsView()
                 .environmentObject(model)
-                .frame(width: 580, height: 475)
+                .frame(width: 580, height: 515)
         }
         .sheet(isPresented: $model.isShowingDatePicker) {
             TradingDatePickerView()
                 .environmentObject(model)
-                .frame(width: 480, height: 500)
+                .frame(width: 500, height: 635)
         }
         .alert("확인 필요", isPresented: Binding(
             get: { model.errorMessage != nil },
@@ -168,6 +169,51 @@ struct ContentView: View {
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.08)))
     }
 
+    private var liveQuotes: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 13) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("관심종목 실시간 가격 미리보기")
+                            .font(.headline)
+                        Text("무료 Alpaca IEX 피드입니다. 미국 전체 거래소 급등 감시가 아닌 테스트용 현재가입니다.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if model.isLiveRunning {
+                        Button("중지") { model.stopLiveQuotes() }
+                            .buttonStyle(.bordered)
+                    } else {
+                        Button("실시간 연결") { model.startLiveQuotes() }
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                Text(model.liveStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(model.isLiveRunning ? Color(red: 0.79, green: 0.97, blue: 0.38) : .secondary)
+
+                if !model.liveTrades.isEmpty {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                        ForEach(model.liveTrades) { trade in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(trade.symbol).font(.caption.bold()).foregroundStyle(.secondary)
+                                Text("$\(trade.price, specifier: "%.2f")").font(.headline.monospacedDigit())
+                                Text("수신 \(DateFormatter.liveTime.string(from: trade.receivedAt))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.04)))
+                        }
+                    }
+                }
+            }
+            .padding(10)
+        }
+    }
+
     @ViewBuilder
     private var results: some View {
         if let result = model.result {
@@ -242,6 +288,32 @@ private struct TradingDatePickerView: View {
             Text("지난 미국 거래일을 선택하세요. 주말을 고르면 직전 평일로 자동 조정됩니다.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                TextField("YYYY-MM-DD", text: $model.dateInputText)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { model.applyTypedDate() }
+                Button("입력 날짜 적용") { model.applyTypedDate() }
+                    .buttonStyle(.bordered)
+            }
+
+            HStack {
+                Button {
+                    model.shiftSelectedYear(by: -1)
+                } label: {
+                    Label("이전 해", systemImage: "chevron.left")
+                }
+                Spacer()
+                Text(DateFormatter.year.string(from: model.selectedDate))
+                    .font(.headline.monospacedDigit())
+                Spacer()
+                Button {
+                    model.shiftSelectedYear(by: 1)
+                } label: {
+                    Label("다음 해", systemImage: "chevron.right")
+                }
+            }
+            .buttonStyle(.bordered)
 
             DatePicker(
                 "분석 날짜",
@@ -361,6 +433,9 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
             Group {
                 SecureField("Massive API Key", text: $model.massiveKey)
+                Text("Massive Stocks에서 발급한 API Key를 입력하세요. 로그인 암호나 Alpaca 키는 사용할 수 없습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 SecureField("Alpaca API Key", text: $model.alpacaKey)
                 SecureField("Alpaca Secret Key", text: $model.alpacaSecret)
                 TextField("SEC 조회용 이메일", text: $model.secEmail)
@@ -410,6 +485,21 @@ private extension DateFormatter {
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.timeZone = TimeZone(identifier: "America/New_York")
         formatter.dateFormat = "MM/dd HH:mm"
+        return formatter
+    }()
+
+    static let year: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "yyyy년"
+        return formatter
+    }()
+
+    static let liveTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
 }

@@ -13,6 +13,7 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 | Analysis service | `CRTMac/Sources/CRT/MarketService.swift` | 외부 API 호출, 급변 감지, 근거 결합 |
 | Credential storage | `CRTMac/Sources/CRT/KeychainStore.swift` | API 키의 로컬 키체인 저장 |
 | Notifications | `CRTMac/Sources/CRT/NotificationService.swift` | 사용자가 허용한 분석 완료 로컬 알림 전달 |
+| Live quotes | `CRTMac/Sources/CRT/LiveQuoteService.swift` | Alpaca IEX WebSocket 관심종목 실시간 체결 표시 |
 | Browser prototype | Node.js + static UI | 기능 흐름과 API 동작의 보조 검증 |
 | Automated tests | Node test runner | 핵심 감지 및 결합 로직 회귀 검사 |
 
@@ -37,9 +38,11 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 ## Interaction Improvements In 0.2
 
 - 작은 날짜 입력 대신 그래픽 달력 패널과 최근 거래일 바로가기를 제공합니다.
+- 직접 날짜 입력과 이전 해·다음 해 이동으로 긴 기간을 빠르게 탐색합니다.
 - 주말 선택은 직전 평일로 보정하며, 실제 미국 휴장 여부는 외부 데이터 조회 결과에 맡깁니다.
 - 결과는 공시·뉴스·원인 미확인 분류별로 필터링할 수 있습니다.
 - 로컬 알림은 자동 감시가 아닌 사용자가 실행한 분석 완료에만 연결됩니다.
+- 관심종목 현재가는 무료 IEX 스트림으로 표시하되 전체시장 감시 결과로 해석하지 않습니다.
 
 ## Design Decisions
 
@@ -50,4 +53,4 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 
 ## Future Direction
 
-실시간 제품으로 확장하려면 전체시장 스트리밍 데이터, 알림 중복 제거, 라이선스 조건, 장애 대응, 서비스 운영 보안과 금융 관련 표시 정책을 함께 설계해야 합니다.
+실시간 제품으로 확장하려면 유료 전체시장 스트리밍 데이터, 급등 감지와 후속 뉴스 조사 연결, 알림 중복 제거, 라이선스 조건, 장애 대응, 서비스 운영 보안과 금융 관련 표시 정책을 함께 설계해야 합니다.

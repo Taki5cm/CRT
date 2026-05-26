@@ -51,6 +51,14 @@ struct NewsEvidence: Identifiable {
     let url: URL?
 }
 
+struct LiveTrade: Identifiable {
+    var id: String { symbol }
+    let symbol: String
+    let price: Double
+    let size: Int
+    let receivedAt: Date
+}
+
 struct AnalysisResult {
     enum Mode {
         case wholeMarket

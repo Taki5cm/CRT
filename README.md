@@ -128,6 +128,7 @@ cd CRTMac
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Data, Privacy and Limitations](docs/DATA_PRIVACY.md)
+- [Versioning and Rollback](docs/VERSIONING.md)
 
 ## Web Prototype
 
@@ -168,6 +169,10 @@ npm test
 | `CRT 0.6` | 양방향 급등락 감시, 수신 변동 TOP 20, 검증형 AI 서포터 준비 영역 |
 | 다음 단계 | 급등락 경보 뒤 뉴스·공시 후속 조사 연결, 포착 후 성과 데이터셋 구축 |
 | 이후 검토 | 배포용 서명·공증과 온보딩 개선 |
+
+## Version Records
+
+기능별 변경점은 [CHANGELOG](CHANGELOG.md)에 기록하며, 복구 가능한 기준 버전과 앞으로의 데이터 호환성 원칙은 [Versioning and Rollback](docs/VERSIONING.md)에서 관리합니다. `0.7`부터 저장 데이터가 생기면 앱 롤백과 데이터 보호를 함께 고려합니다.
 
 ## References
 

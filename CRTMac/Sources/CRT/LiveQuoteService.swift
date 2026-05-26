@@ -10,8 +10,11 @@ final class LiveQuoteService {
     private var secret = ""
     private var shouldStayConnected = false
     private var reconnectWorkItem: DispatchWorkItem?
+    private var receivedTradeCount = 0
+    private var lastActivityPublishedAt = Date.distantPast
     private var onTrade: ((LiveTrade) -> Void)?
     private var onAlert: ((LiveAlert) -> Void)?
+    private var onActivity: ((Int, Date) -> Void)?
     private var onStatus: ((String, Bool) -> Void)?
     private let detector = LiveRapidMoveDetector()
     private let timestampFormatter: ISO8601DateFormatter = {
@@ -29,6 +32,7 @@ final class LiveQuoteService {
         rules: LiveScanRules,
         onTrade: @escaping (LiveTrade) -> Void,
         onAlert: @escaping (LiveAlert) -> Void,
+        onActivity: @escaping (Int, Date) -> Void,
         onStatus: @escaping (String, Bool) -> Void
     ) {
         disconnect()
@@ -40,8 +44,11 @@ final class LiveQuoteService {
         self.rules = rules
         self.onTrade = onTrade
         self.onAlert = onAlert
+        self.onActivity = onActivity
         self.onStatus = onStatus
         detector.reset()
+        receivedTradeCount = 0
+        lastActivityPublishedAt = .distantPast
         shouldStayConnected = true
         openConnection()
     }
@@ -123,6 +130,11 @@ final class LiveQuoteService {
                     occurredAt: packet.timestamp.flatMap(timestampFormatter.date(from:)) ?? receivedAt,
                     receivedAt: receivedAt
                 )
+                receivedTradeCount += 1
+                if !allSymbols || receivedAt.timeIntervalSince(lastActivityPublishedAt) >= 1 {
+                    lastActivityPublishedAt = receivedAt
+                    onActivity?(receivedTradeCount, receivedAt)
+                }
                 if !allSymbols {
                     onTrade?(trade)
                 }

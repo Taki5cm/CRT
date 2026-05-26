@@ -2,7 +2,7 @@
   <img src="CRTMac/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="132" alt="CRT app icon">
 </p>
 
-<h1 align="center">CRT 0.4</h1>
+<h1 align="center">CRT 0.5</h1>
 
 <p align="center">
   <strong>Catalyst Rapid-move Tracker</strong><br>
@@ -12,14 +12,14 @@
 <p align="center">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.4-8A63D2">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.5-8A63D2">
 </p>
 
 ## Overview
 
 `CRT`는 1분, 2분, 5분처럼 짧은 구간에 급격한 상승이 발생했던 미국 주식 후보를 찾고, 그 움직임과 같은 날짜의 공시 또는 시점 주변 뉴스를 함께 확인하는 조사 도구입니다.
 
-현재 `CRT 0.4`는 **사용자가 자신의 API Key를 연결해 자기 Mac에서 계속 실행하는 시장 감시 베타**입니다. 무료 Alpaca IEX에서는 관심종목 감시를 시험할 수 있고, 사용자가 유료 SIP 권한을 가진 경우 전체 상장주 감시 모드를 선택할 수 있습니다. 과거 자료 조회는 별도의 1회성 사후 분석으로 분리되어 있습니다. 경보는 가격 움직임 관측이며 투자 추천이나 자동매매 신호가 아닙니다. 내부 빌드 버전은 `0.4.0`입니다.
+현재 `CRT 0.5`는 **사용자가 자신의 API Key를 연결해 자기 Mac에서 계속 실행하는 시장 감시 베타**입니다. 무료 Alpaca IEX에서는 관심종목 감시와 체결 수신 여부를 확인할 수 있고, 사용자가 유료 SIP 권한을 가진 경우 전체 상장주 감시 모드를 선택할 수 있습니다. 과거 자료 조회는 별도의 1회성 사후 분석으로 분리되어 있습니다. 경보는 가격 움직임 관측이며 투자 추천이나 자동매매 신호가 아닙니다. 내부 빌드 버전은 `0.5.0`입니다.
 
 ## What It Does
 
@@ -35,6 +35,7 @@
 | 지속 시장 감시 | Alpaca WebSocket IEX/SIP | 사용자가 중지할 때까지 초 단위 가격·거래대금 조건을 검사해 감지 로그와 Mac 알림 표시 |
 | 감시 모드 선택 | 사용자 계정 권한 | `관심종목 · 무료 IEX` 또는 `전체시장 · 유료 SIP` 중 하나를 명확히 선택 |
 | 연결 복구 | 로컬 앱 | 감시 중 연결 단절 시 자동 재연결을 시도 |
+| 수신 진단 | 로컬 앱 | 감시 중 실제 수신 체결 수와 마지막 수신 시각을 표시하고 시험 기준을 빠르게 적용 |
 | 자격정보 보관 | macOS Keychain | Mac 앱에서 API 키를 로컬 키체인에 저장 |
 
 ## Analysis Flow
@@ -75,7 +76,7 @@ cd CRTMac
 생성 파일:
 
 - `CRTMac/build/CRT.app`
-- `CRTMac/build/CRT-0.4.zip`
+- `CRTMac/build/CRT-0.5.zip`
 
 현재 배포 파일은 개인 테스트용 ad-hoc 서명 빌드입니다. 일반 사용자에게 경고 없는 설치 경험을 제공하려면 Apple Developer 서명과 공증 절차가 추가로 필요합니다.
 
@@ -89,7 +90,7 @@ cd CRTMac
 | 전체 상장주 실시간 감지 | Alpaca SIP 접근 권한 및 키 | 사용자가 직접 구독한 SIP 실시간 스트림 |
 | 공식 공시 연결 | 연락 이메일 | SEC EDGAR 요청의 사용자 식별용 헤더에 사용 |
 
-2026년 5월 26일 확인 기준, Alpaca Basic에서 구독 없이 사용할 수 있는 주식 실시간 피드는 IEX이며 WebSocket은 최대 30개 종목입니다. 유료 Algo Trader Plus는 SIP 실시간 데이터와 무제한 WebSocket 종목 구독을 제공합니다. `CRT 0.4`는 서버가 시세를 재배포하지 않고 사용자의 키로 로컬에서 직접 수신하도록 설계했습니다. Massive Stocks Basic 사후 분석은 분당 호출 제한 때문에 상세 분봉 확인을 상위 후보 4개로 제한합니다.
+2026년 5월 26일 확인 기준, Alpaca Basic에서 구독 없이 사용할 수 있는 주식 실시간 피드는 IEX이며 WebSocket은 최대 30개 종목입니다. Alpaca 문서는 IEX를 단일 거래소로 설명하고, SIP는 미국 전체 거래소를 통합한 전체 거래량 범위로 설명합니다. 유료 Algo Trader Plus는 SIP 실시간 데이터와 무제한 WebSocket 종목 구독을 제공합니다. `CRT 0.5`는 서버가 시세를 재배포하지 않고 사용자의 키로 로컬에서 직접 수신하도록 설계했습니다. Massive Stocks Basic 사후 분석은 분당 호출 제한 때문에 상세 분봉 확인을 상위 후보 4개로 제한합니다.
 
 ## Repository Layout
 
@@ -111,7 +112,8 @@ cd CRTMac
 - 앱은 Massive, Alpaca, SEC를 브라우저 자동검색으로 긁는 방식이 아니라 공식 API 요청으로 연결합니다.
 - 시세 후보 분석이 성공했다면, 뉴스 또는 공시 조회 실패는 경고로 표시하고 분석 결과 자체는 유지합니다.
 - 브라우저 시험판은 입력한 키를 저장하지 않습니다. Mac 앱은 키를 macOS Keychain에 저장합니다.
-- `CRT 0.4`의 시장 감시는 사용자가 중지할 때까지 연결을 유지하며, 일시적인 단절이 발생하면 자동 재연결을 시도합니다.
+- `CRT 0.5`의 시장 감시는 사용자가 중지할 때까지 연결을 유지하며, 일시적인 단절이 발생하면 자동 재연결을 시도합니다.
+- 감지 판단은 감시를 시작한 뒤 앱이 실제로 수신한 체결 두 건 이상을 비교합니다. 이미 끝난 급등은 실시간 경보로 소급 표시하지 않습니다.
 - 실시간 가격 조건 충족 시 즉시 Mac 알림을 생성합니다. 알림은 가격 기반 후보 경보이며 매매 지시가 아닙니다.
 - 실시간 경보의 자동 뉴스·공시 후속 조사와 테마성 판단은 아직 연결되지 않았습니다.
 - Alpaca 관심종목 사후 분석도 무료 계정과 맞추기 위해 IEX 분봉을 사용하므로, 전체시장 분석으로 해석해서는 안 됩니다.
@@ -158,6 +160,7 @@ npm test
 | `CRT 0.2` | 직접 날짜 입력·달력 선택, 결과 필터, 분석 완료 알림, IEX 가격 미리보기 |
 | `CRT 0.3` | 사용자 키 기반 실시간 급등 감지, 초 단위 조건, 즉시 Mac 알림, 선택형 IEX/SIP 모드 |
 | `CRT 0.4` | 지속 시장 감시 중심 화면, 감시 모드 구분, 경과 시간, 자동 재연결, 사후 분석 분리 |
+| `CRT 0.5` | 실제 체결 수신 진단, 연결 시험 기준, 금액 입력 가독성 개선 |
 | 다음 단계 | 급등 경보 뒤 뉴스·공시 후속 조사 연결, 가격 흐름·근거 타임라인 |
 | 이후 검토 | 배포용 서명·공증과 온보딩 개선 |
 

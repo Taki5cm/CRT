@@ -27,6 +27,8 @@ final class AppModel: ObservableObject {
     @Published var liveRules = LiveScanRules()
     @Published var liveAlerts: [LiveAlert] = []
     @Published var liveStartedAt: Date?
+    @Published var liveReceivedTradeCount = 0
+    @Published var liveLastTradeAt: Date?
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -189,6 +191,8 @@ final class AppModel: ObservableObject {
         errorMessage = nil
         liveTrades = []
         liveAlerts = []
+        liveReceivedTradeCount = 0
+        liveLastTradeAt = nil
         isLiveRunning = true
         liveStartedAt = Date()
         liveStatusMessage = "\(liveMonitoringMode.label) 연결을 시작하고 있습니다..."
@@ -216,6 +220,11 @@ final class AppModel: ObservableObject {
                     await self.notificationService.sendLiveAlertNotification(alert)
                 }
             }
+        } onActivity: { [weak self] count, latestAt in
+            Task { @MainActor in
+                self?.liveReceivedTradeCount = count
+                self?.liveLastTradeAt = latestAt
+            }
         } onStatus: { [weak self] status, isConnected in
             Task { @MainActor in
                 self?.liveStatusMessage = status
@@ -233,6 +242,14 @@ final class AppModel: ObservableObject {
 
     func clearLiveAlerts() {
         liveAlerts = []
+    }
+
+    func applyReceptionTestRules() {
+        liveRules.windowSeconds = 60
+        liveRules.thresholdPercent = 0.1
+        liveRules.minimumPrice = 0.01
+        liveRules.minimumDollarVolume = 1
+        liveRules.cooldownSeconds = 60
     }
 
     private func beginAnalysis(message: String, operation: @escaping () async throws -> AnalysisResult) {

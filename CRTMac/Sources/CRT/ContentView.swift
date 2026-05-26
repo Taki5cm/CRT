@@ -45,7 +45,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.4")
+                Text("0.5")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -116,8 +116,8 @@ struct ContentView: View {
                     }
                     LabeledContent("최소 거래대금") {
                         HStack(spacing: 4) {
-                            TextField("", value: $model.rules.minimumDollarVolume, format: .number)
-                                .frame(width: 100)
+                            TextField("", value: $model.rules.minimumDollarVolume, format: .number.grouping(.automatic))
+                                .frame(width: 122)
                             Text("USD")
                         }
                     }
@@ -283,8 +283,8 @@ struct ContentView: View {
                     LabeledContent("시간창 거래대금") {
                         HStack(spacing: 4) {
                             Text("$")
-                            TextField("", value: $model.liveRules.minimumDollarVolume, format: .number)
-                                .frame(width: 100)
+                            TextField("", value: $model.liveRules.minimumDollarVolume, format: .number.grouping(.automatic))
+                                .frame(width: 120)
                         }
                     }
                     LabeledContent("재알림 제한") {
@@ -298,9 +298,36 @@ struct ContentView: View {
                     }
                 }
                 .disabled(model.isLiveRunning)
+                HStack {
+                    Text("포착은 감시 시작 후 수신된 체결 사이의 움직임을 계산합니다. 이미 오른 구간은 포착 대상이 아닙니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    if !model.isLiveRunning {
+                        Button("수신 확인용 기준 적용") { model.applyReceptionTestRules() }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                    }
+                }
                 Text(model.liveStatusMessage)
                     .font(.caption)
                     .foregroundStyle(model.isLiveRunning ? Color(red: 0.79, green: 0.97, blue: 0.38) : .secondary)
+
+                if model.isLiveRunning {
+                    HStack(spacing: 12) {
+                        Metric(title: "수신 체결", value: "\(model.liveReceivedTradeCount.formatted())건")
+                        Metric(
+                            title: "마지막 수신",
+                            value: model.liveLastTradeAt.map(DateFormatter.liveTime.string(from:)) ?? "아직 없음"
+                        )
+                        Metric(title: "감시 범위", value: model.liveMonitoringMode.scansAllSymbols ? "전체시장 SIP" : "관심종목 IEX")
+                    }
+                    if model.liveReceivedTradeCount == 0 {
+                        Text("아직 선택한 피드에서 체결이 들어오지 않았습니다. 무료 IEX는 미국 전체 거래가 아니라 한 거래소 자료이므로, 프리마켓 화면에 움직임이 보여도 수신되지 않을 수 있습니다.")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
 
                 if !model.liveAlerts.isEmpty {
                     HStack {

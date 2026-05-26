@@ -2,7 +2,7 @@
 
 ## Purpose
 
-CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜의 공시와 시점 주변 뉴스를 함께 표시하여 사용자가 움직임의 배경을 조사하도록 돕는 기능형 베타입니다.
+CRT는 짧은 시간 내 급격한 가격 상승 또는 하락을 발견한 뒤, 동일 날짜의 공시와 시점 주변 뉴스를 함께 표시하여 사용자가 움직임의 배경을 조사하도록 돕는 기능형 베타입니다.
 
 ## Components
 
@@ -14,7 +14,7 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 | Credential storage | `CRTMac/Sources/CRT/KeychainStore.swift` | API 키의 로컬 키체인 저장 |
 | Notifications | `CRTMac/Sources/CRT/NotificationService.swift` | 사용자가 허용한 분석 완료 로컬 알림 전달 |
 | Live stream | `CRTMac/Sources/CRT/LiveQuoteService.swift` | 사용자 권한에 따른 Alpaca IEX/SIP WebSocket 체결 수신 |
-| Live detection | `CRTMac/Sources/CRT/LiveRapidMoveDetector.swift` | 초 단위 가격·거래대금 조건 계산과 중복 경보 제한 |
+| Live detection | `CRTMac/Sources/CRT/LiveRapidMoveDetector.swift` | 초 단위 양방향 가격·거래대금 조건 계산과 방향별 중복 경보 제한 |
 | Browser prototype | Node.js + static UI | 기능 흐름과 API 동작의 보조 검증 |
 | Automated tests | Node test runner | 핵심 감지 및 결합 로직 회귀 검사 |
 
@@ -68,6 +68,18 @@ CRT는 짧은 시간 내 급격한 가격 변화를 발견한 뒤, 동일 날짜
 - 스트림 인증 및 구독 성공과 실제 체결 수신은 다르므로, UI에 실제 수신 체결 수와 마지막 수신 시간을 표시합니다.
 - IEX 관심종목 모드는 매 체결마다 상태가 즉시 바뀌며, SIP 전체시장 모드는 UI 부하를 줄이기 위해 상태 표시를 최대 초당 한 번 갱신합니다.
 - 수신 확인용 기준은 연결 시험을 위해 감지 조건을 완화할 뿐, 시장 전체 범위나 데이터 권한을 변경하지 않습니다.
+
+## Bidirectional Movers In 0.6
+
+1. 각 종목의 선택 시간창 체결에서 현재 가격과 창 안의 저점·고점을 비교합니다.
+2. 저점 대비 상승과 고점 대비 하락 중 절대 변화가 큰 방향을 현재 변동으로 기록합니다.
+3. 사용자의 `급등·급락`, `급등만`, `급락만` 선택과 경보 기준을 충족하면 알림을 만듭니다.
+4. 현재 감시 범위에서 수신된 변동을 절대 변화율 기준으로 정렬해 최대 20개를 화면에 표시합니다.
+5. IEX 모드의 랭킹은 관심종목 범위이며 SIP 전체시장 모드에서만 전체시장 랭킹 의미를 갖습니다.
+
+## Supporter Model Direction
+
+위험률·기대률 계산에는 감지 시점의 가격/거래대금/세션/뉴스 근거와 포착 후 `1`, `5`, `15`분 수익률 표본이 필요합니다. 모델을 제품에 표시하기 전에 시간 순서가 보존된 검증 구간에서 정확도와 오경보 위험을 확인해야 하므로, 0.6은 자리와 입력 범위만 제시하고 예측치는 표시하지 않습니다.
 
 ## Design Decisions
 

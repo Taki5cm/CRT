@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     @Published var liveStartedAt: Date?
     @Published var liveReceivedTradeCount = 0
     @Published var liveLastTradeAt: Date?
+    @Published var liveMovers: [LiveMovement] = []
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -193,6 +194,7 @@ final class AppModel: ObservableObject {
         liveAlerts = []
         liveReceivedTradeCount = 0
         liveLastTradeAt = nil
+        liveMovers = []
         isLiveRunning = true
         liveStartedAt = Date()
         liveStatusMessage = "\(liveMonitoringMode.label) 연결을 시작하고 있습니다..."
@@ -215,7 +217,7 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.liveAlerts.insert(alert, at: 0)
                 self.liveAlerts = Array(self.liveAlerts.prefix(100))
-                self.liveStatusMessage = "\(alert.symbol) 급등 후보를 감지했습니다. 뉴스·공시 확인 전 가격 경보입니다."
+                self.liveStatusMessage = "\(alert.symbol) \(alert.direction.label) 후보를 감지했습니다. 뉴스·공시 확인 전 가격 경보입니다."
                 if self.notificationsEnabled {
                     await self.notificationService.sendLiveAlertNotification(alert)
                 }
@@ -224,6 +226,10 @@ final class AppModel: ObservableObject {
             Task { @MainActor in
                 self?.liveReceivedTradeCount = count
                 self?.liveLastTradeAt = latestAt
+            }
+        } onMovers: { [weak self] movers in
+            Task { @MainActor in
+                self?.liveMovers = movers
             }
         } onStatus: { [weak self] status, isConnected in
             Task { @MainActor in

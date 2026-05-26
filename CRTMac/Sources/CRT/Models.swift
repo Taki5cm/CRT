@@ -69,7 +69,7 @@ enum LiveDataFeed: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .iex: return "IEX 무료 시험"
-        case .sip: return "SIP 전체시장 (유료·실험)"
+        case .sip: return "SIP 전체시장 (유료 시험)"
         }
     }
 
@@ -128,6 +128,60 @@ struct LiveScanRules {
     var minimumPrice: Double = 1
     var minimumDollarVolume: Double = 10_000
     var cooldownSeconds: Int = 300
+    var directionFilter: LiveDirectionFilter = .both
+}
+
+enum LiveDirectionFilter: String, CaseIterable, Identifiable {
+    case both
+    case rising
+    case falling
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .both: return "급등·급락"
+        case .rising: return "급등만"
+        case .falling: return "급락만"
+        }
+    }
+
+    func includes(_ direction: LiveMoveDirection) -> Bool {
+        switch self {
+        case .both: return true
+        case .rising: return direction == .rising
+        case .falling: return direction == .falling
+        }
+    }
+}
+
+enum LiveMoveDirection {
+    case rising
+    case falling
+
+    var label: String {
+        switch self {
+        case .rising: return "급등"
+        case .falling: return "급락"
+        }
+    }
+}
+
+struct LiveMovement: Identifiable {
+    var id: String { symbol }
+    let symbol: String
+    let direction: LiveMoveDirection
+    let changePercent: Double
+    let latestPrice: Double
+    let dollarVolume: Double
+    let observedAt: Date
+    let windowSeconds: Int
+    let feed: LiveDataFeed
+}
+
+struct LiveDetectionUpdate {
+    let movement: LiveMovement?
+    let alert: LiveAlert?
 }
 
 struct LiveAlert: Identifiable {
@@ -137,6 +191,7 @@ struct LiveAlert: Identifiable {
     let baselinePrice: Double
     let latestPrice: Double
     let changePercent: Double
+    let direction: LiveMoveDirection
     let dollarVolume: Double
     let windowSeconds: Int
     let feed: LiveDataFeed

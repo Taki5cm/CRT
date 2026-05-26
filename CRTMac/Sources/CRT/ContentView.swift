@@ -11,6 +11,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     header
                     liveQuotes
+                    supporterAI
                     historicalAnalysis
                 }
                 .padding(28)
@@ -45,7 +46,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.5")
+                Text("0.6")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -53,7 +54,7 @@ struct ContentView: View {
                     .padding(.vertical, 6)
                     .overlay(Capsule().stroke(.secondary.opacity(0.5)))
             }
-            Text("시장을 계속 감시하고\n급등 순간을 포착합니다")
+            Text("시장을 계속 감시하고\n급등락 순간을 포착합니다")
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .tracking(-1.5)
             Text("감시 시작 후 중지할 때까지 체결 흐름을 확인합니다. 감지 결과는 매수 추천이나 자동매매 신호가 아닙니다.")
@@ -192,7 +193,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("시장 감시")
                             .font(.title3.bold())
-                        Text("시작하면 연결을 유지하며 조건에 맞는 급등 후보가 나올 때까지 계속 작동합니다.")
+                        Text("시작하면 연결을 유지하며 조건에 맞는 급등·급락 후보가 나올 때까지 계속 작동합니다.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -257,6 +258,15 @@ struct ContentView: View {
                 }
 
                 HStack(spacing: 18) {
+                    LabeledContent("포착 방향") {
+                        Picker("", selection: $model.liveRules.directionFilter) {
+                            ForEach(LiveDirectionFilter.allCases) { direction in
+                                Text(direction.label).tag(direction)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 120)
+                    }
                     LabeledContent("감지 시간") {
                         Picker("", selection: $model.liveRules.windowSeconds) {
                             ForEach([1, 2, 5, 30, 60], id: \.self) { seconds in
@@ -266,13 +276,16 @@ struct ContentView: View {
                         .labelsHidden()
                         .frame(width: 86)
                     }
-                    LabeledContent("상승률") {
+                    LabeledContent("변동률") {
                         HStack(spacing: 4) {
                             TextField("", value: $model.liveRules.thresholdPercent, format: .number)
                                 .frame(width: 58)
                             Text("%")
                         }
                     }
+                    Spacer()
+                }
+                HStack(spacing: 18) {
                     LabeledContent("최소 주가") {
                         HStack(spacing: 4) {
                             Text("$")
@@ -329,9 +342,31 @@ struct ContentView: View {
                     }
                 }
 
+                if !model.liveMovers.isEmpty {
+                    HStack {
+                        Text("현재 수신 급등락 TOP 20")
+                            .font(.subheadline.bold())
+                        Text("\(model.liveRules.windowSeconds)초 창")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(model.liveMonitoringMode.scansAllSymbols ? "전체시장 SIP 범위" : "입력한 관심종목 IEX 범위")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("현재 수신 스트림의 변동 순위입니다. 경보에는 별도로 최소 거래대금과 변동률 조건이 적용됩니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    VStack(spacing: 6) {
+                        ForEach(Array(model.liveMovers.enumerated()), id: \.element.id) { index, movement in
+                            LiveMovementRow(rank: index + 1, movement: movement)
+                        }
+                    }
+                }
+
                 if !model.liveAlerts.isEmpty {
                     HStack {
-                        Text("감지 로그")
+                        Text("급등락 포착 로그")
                             .font(.subheadline.bold())
                         Text("\(model.liveAlerts.count)건")
                             .font(.caption)
@@ -368,6 +403,36 @@ struct ContentView: View {
                         }
                     }
                 }
+            }
+            .padding(10)
+        }
+    }
+
+    private var supporterAI: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("위험·기대 분석 서포터")
+                        .font(.title3.bold())
+                    Text("준비 중")
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.orange.opacity(0.13)))
+                    Spacer()
+                }
+                Text("급등락 포착 뒤의 추가 상승, 급락, 되돌림을 과거 사례로 비교하는 보조 기능을 다음 단계에서 연결합니다.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Metric(title: "학습 대상", value: "포착 후 1·5·15분")
+                    Metric(title: "입력 근거", value: "가격·거래대금·뉴스")
+                    Metric(title: "현재 표시", value: "예측치 미제공")
+                }
+                Text("검증되지 않은 확률을 투자 판단처럼 보여주지 않기 위해, 충분한 과거 표본과 성능 검증이 준비되기 전에는 상승 기대률·하락 위험률 숫자를 표시하지 않습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(10)
         }
@@ -527,9 +592,9 @@ private struct LiveAlertCard: View {
             Text(alert.symbol)
                 .font(.headline.bold())
                 .frame(width: 70, alignment: .leading)
-            Text("+\(alert.changePercent.formatted(.number.precision(.fractionLength(2))))%")
+            Text(String(format: "%+.2f%%", alert.changePercent))
                 .font(.headline.monospacedDigit())
-                .foregroundStyle(.green)
+                .foregroundStyle(alert.direction == .rising ? .green : .red)
                 .frame(width: 92, alignment: .leading)
             Text("\(alert.windowSeconds)초")
                 .foregroundStyle(.secondary)
@@ -547,8 +612,54 @@ private struct LiveAlertCard: View {
         }
         .font(.callout)
         .padding(11)
-        .background(RoundedRectangle(cornerRadius: 9).fill(Color.green.opacity(0.08)))
-        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.green.opacity(0.22)))
+        .background(RoundedRectangle(cornerRadius: 9).fill(cardColor.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(cardColor.opacity(0.22)))
+    }
+
+    private var cardColor: Color {
+        alert.direction == .rising ? .green : .red
+    }
+}
+
+private struct LiveMovementRow: View {
+    let rank: Int
+    let movement: LiveMovement
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Text("\(rank)")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 24, alignment: .trailing)
+            Text(movement.symbol)
+                .font(.callout.bold())
+                .frame(width: 72, alignment: .leading)
+            Text(movement.direction.label)
+                .font(.caption.bold())
+                .foregroundStyle(color)
+                .frame(width: 40, alignment: .leading)
+            Text(String(format: "%+.2f%%", movement.changePercent))
+                .font(.callout.monospacedDigit().bold())
+                .foregroundStyle(color)
+                .frame(width: 86, alignment: .trailing)
+            Text("$\(movement.latestPrice, specifier: "%.2f")")
+                .font(.callout.monospacedDigit())
+                .frame(width: 86, alignment: .trailing)
+            Text("체결대금 $\(movement.dollarVolume.formatted(.number.notation(.compactName)))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(DateFormatter.liveTime.string(from: movement.observedAt))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(color.opacity(0.055)))
+    }
+
+    private var color: Color {
+        movement.direction == .rising ? .green : .red
     }
 }
 
@@ -634,7 +745,7 @@ struct SettingsView: View {
             }
             .textFieldStyle(.roundedBorder)
             Divider()
-            Toggle("급등 포착 및 분석 완료 알림 받기", isOn: Binding(
+            Toggle("급등락 포착 및 분석 완료 알림 받기", isOn: Binding(
                 get: { model.notificationsEnabled },
                 set: { model.setNotificationsEnabled($0) }
             ))

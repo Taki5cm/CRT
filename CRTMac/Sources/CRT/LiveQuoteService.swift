@@ -12,9 +12,12 @@ final class LiveQuoteService {
     private var reconnectWorkItem: DispatchWorkItem?
     private var receivedTradeCount = 0
     private var lastActivityPublishedAt = Date.distantPast
+    private var latestMovements: [String: LiveMovement] = [:]
+    private var lastMoversPublishedAt = Date.distantPast
     private var onTrade: ((LiveTrade) -> Void)?
     private var onAlert: ((LiveAlert) -> Void)?
     private var onActivity: ((Int, Date) -> Void)?
+    private var onMovers: (([LiveMovement]) -> Void)?
     private var onStatus: ((String, Bool) -> Void)?
     private let detector = LiveRapidMoveDetector()
     private let timestampFormatter: ISO8601DateFormatter = {
@@ -33,6 +36,7 @@ final class LiveQuoteService {
         onTrade: @escaping (LiveTrade) -> Void,
         onAlert: @escaping (LiveAlert) -> Void,
         onActivity: @escaping (Int, Date) -> Void,
+        onMovers: @escaping ([LiveMovement]) -> Void,
         onStatus: @escaping (String, Bool) -> Void
     ) {
         disconnect()
@@ -45,10 +49,13 @@ final class LiveQuoteService {
         self.onTrade = onTrade
         self.onAlert = onAlert
         self.onActivity = onActivity
+        self.onMovers = onMovers
         self.onStatus = onStatus
         detector.reset()
         receivedTradeCount = 0
         lastActivityPublishedAt = .distantPast
+        latestMovements = [:]
+        lastMoversPublishedAt = .distantPast
         shouldStayConnected = true
         openConnection()
     }
@@ -138,7 +145,14 @@ final class LiveQuoteService {
                 if !allSymbols {
                     onTrade?(trade)
                 }
-                if let alert = detector.process(trade: trade, rules: rules, feed: feed) {
+                let update = detector.process(trade: trade, rules: rules, feed: feed)
+                if let movement = update.movement {
+                    latestMovements[movement.symbol] = movement
+                    if !allSymbols || receivedAt.timeIntervalSince(lastMoversPublishedAt) >= 1 {
+                        publishMovers(at: receivedAt)
+                    }
+                }
+                if let alert = update.alert {
                     onAlert?(alert)
                 }
             case "error":
@@ -150,6 +164,15 @@ final class LiveQuoteService {
                 continue
             }
         }
+    }
+
+    private func publishMovers(at now: Date) {
+        lastMoversPublishedAt = now
+        let cutoff = now.addingTimeInterval(TimeInterval(-rules.windowSeconds))
+        latestMovements = latestMovements.filter { $0.value.observedAt >= cutoff }
+        let movers = latestMovements.values
+            .sorted { abs($0.changePercent) > abs($1.changePercent) }
+        onMovers?(Array(movers.prefix(20)))
     }
 
     private func scheduleReconnect() {

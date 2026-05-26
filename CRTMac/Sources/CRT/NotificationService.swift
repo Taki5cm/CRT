@@ -49,13 +49,29 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
 
         if result.reports.isEmpty {
-            content.title = "CRT 0.2 분석 완료"
+            content.title = "CRT 0.3 분석 완료"
             content.body = "\(result.date) 기준에 맞는 급변 후보가 발견되지 않았습니다."
         } else {
             let symbols = result.reports.prefix(3).map(\.symbol).joined(separator: ", ")
-            content.title = "CRT 0.2 급변 후보 \(result.reports.count)건"
+            content.title = "CRT 0.3 급변 후보 \(result.reports.count)건"
             content.body = "\(result.date) 분석: \(symbols) 후보를 확인하세요."
         }
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+        try? await center.add(request)
+    }
+
+    func sendLiveAlertNotification(_ alert: LiveAlert) async {
+        guard await permissionState() == .allowed else { return }
+
+        let content = UNMutableNotificationContent()
+        content.sound = .default
+        content.title = "CRT 0.3 실시간 급등 감지: \(alert.symbol)"
+        content.body = "\(alert.windowSeconds)초 안에 +\(String(format: "%.2f", alert.changePercent))% · 현재 $\(String(format: "%.2f", alert.latestPrice)) · 원인 확인 필요"
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

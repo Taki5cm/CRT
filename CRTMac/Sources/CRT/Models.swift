@@ -56,7 +56,49 @@ struct LiveTrade: Identifiable {
     let symbol: String
     let price: Double
     let size: Int
+    let occurredAt: Date
     let receivedAt: Date
+}
+
+enum LiveDataFeed: String, CaseIterable, Identifiable {
+    case iex
+    case sip
+
+    var id: Self { self }
+
+    var label: String {
+        switch self {
+        case .iex: return "IEX 무료 시험"
+        case .sip: return "SIP 전체시장 (유료·실험)"
+        }
+    }
+
+    var explanation: String {
+        switch self {
+        case .iex: return "무료 계정용: 입력한 관심종목만 감지합니다."
+        case .sip: return "Alpaca Algo Trader Plus용: 전체 상장주 감지는 고수신량 시험 모드입니다."
+        }
+    }
+}
+
+struct LiveScanRules {
+    var windowSeconds: Int = 2
+    var thresholdPercent: Double = 10
+    var minimumPrice: Double = 1
+    var minimumDollarVolume: Double = 10_000
+    var cooldownSeconds: Int = 300
+}
+
+struct LiveAlert: Identifiable {
+    let id = UUID()
+    let symbol: String
+    let detectedAt: Date
+    let baselinePrice: Double
+    let latestPrice: Double
+    let changePercent: Double
+    let dollarVolume: Double
+    let windowSeconds: Int
+    let feed: LiveDataFeed
 }
 
 struct AnalysisResult {

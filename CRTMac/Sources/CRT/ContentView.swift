@@ -48,7 +48,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.2")
+                Text("0.3")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -56,10 +56,10 @@ struct ContentView: View {
                     .padding(.vertical, 6)
                     .overlay(Capsule().stroke(.secondary.opacity(0.5)))
             }
-            Text("지난 거래일의 급등 이유를\n실제 자료로 추적합니다")
+            Text("실시간 급등을 포착하고\n근거를 추적합니다")
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .tracking(-1.5)
-            Text("실시간 매매 도구가 아닌 사후 조사 베타입니다. 결과는 투자 추천이나 매매 신호가 아닙니다.")
+            Text("사용자 본인의 데이터 연결로 작동하는 개인용 스캐너 베타입니다. 감지 결과는 매수 추천이나 자동매매 신호가 아닙니다.")
                 .foregroundStyle(.secondary)
         }
     }
@@ -171,12 +171,12 @@ struct ContentView: View {
 
     private var liveQuotes: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 13) {
+            VStack(alignment: .leading, spacing: 16) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("관심종목 실시간 가격 미리보기")
+                        Text("실시간 급등 감지")
                             .font(.headline)
-                        Text("무료 Alpaca IEX 피드입니다. 미국 전체 거래소 급등 감시가 아닌 테스트용 현재가입니다.")
+                        Text("가격 경보를 먼저 표시하고, 뉴스·공시 원인 확인은 후속 분석으로 진행합니다.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -185,15 +185,91 @@ struct ContentView: View {
                         Button("중지") { model.stopLiveQuotes() }
                             .buttonStyle(.bordered)
                     } else {
-                        Button("실시간 연결") { model.startLiveQuotes() }
+                        Button("감지 시작") { model.startLiveQuotes() }
                             .buttonStyle(.borderedProminent)
                     }
                 }
+
+                HStack(spacing: 16) {
+                    LabeledContent("데이터 범위") {
+                        Picker("", selection: $model.liveFeed) {
+                            ForEach(LiveDataFeed.allCases) { feed in
+                                Text(feed.label).tag(feed)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 165)
+                        .disabled(model.isLiveRunning)
+                    }
+                    Toggle("전체 상장주 감지", isOn: $model.scanAllLiveMarket)
+                        .disabled(model.isLiveRunning || model.liveFeed != .sip)
+                    Spacer()
+                }
+                Text(model.liveFeed.explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                HStack(spacing: 18) {
+                    LabeledContent("감지 시간") {
+                        Picker("", selection: $model.liveRules.windowSeconds) {
+                            ForEach([1, 2, 5, 30, 60], id: \.self) { seconds in
+                                Text("\(seconds)초").tag(seconds)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 86)
+                    }
+                    LabeledContent("상승률") {
+                        HStack(spacing: 4) {
+                            TextField("", value: $model.liveRules.thresholdPercent, format: .number)
+                                .frame(width: 58)
+                            Text("%")
+                        }
+                    }
+                    LabeledContent("최소 주가") {
+                        HStack(spacing: 4) {
+                            Text("$")
+                            TextField("", value: $model.liveRules.minimumPrice, format: .number)
+                                .frame(width: 62)
+                        }
+                    }
+                    LabeledContent("시간창 거래대금") {
+                        HStack(spacing: 4) {
+                            Text("$")
+                            TextField("", value: $model.liveRules.minimumDollarVolume, format: .number)
+                                .frame(width: 100)
+                        }
+                    }
+                }
+                .disabled(model.isLiveRunning)
                 Text(model.liveStatusMessage)
                     .font(.caption)
                     .foregroundStyle(model.isLiveRunning ? Color(red: 0.79, green: 0.97, blue: 0.38) : .secondary)
 
-                if !model.liveTrades.isEmpty {
+                if !model.liveAlerts.isEmpty {
+                    HStack {
+                        Text("감지 로그")
+                            .font(.subheadline.bold())
+                        Text("\(model.liveAlerts.count)건")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("로그 지우기") { model.clearLiveAlerts() }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.liveAlerts.prefix(8)) { alert in
+                        LiveAlertCard(alert: alert)
+                    }
+                }
+
+                if model.scanAllLiveMarket, model.isLiveRunning {
+                    Text("전체시장 모드는 수신량이 많아 일반 체결을 화면에 계속 표시하지 않고, 조건을 충족한 감지 로그만 갱신합니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else if !model.liveTrades.isEmpty {
+                    Text("수신 중인 관심종목 가격")
+                        .font(.subheadline.bold())
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
                         ForEach(model.liveTrades) { trade in
                             VStack(alignment: .leading, spacing: 6) {
@@ -211,6 +287,11 @@ struct ContentView: View {
                 }
             }
             .padding(10)
+        }
+        .onChange(of: model.liveFeed) { _, newFeed in
+            if newFeed == .iex {
+                model.scanAllLiveMarket = false
+            }
         }
     }
 
@@ -360,6 +441,36 @@ private struct Metric: View {
     }
 }
 
+private struct LiveAlertCard: View {
+    let alert: LiveAlert
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Text(alert.symbol)
+                .font(.headline.bold())
+                .frame(width: 70, alignment: .leading)
+            Text("+\(alert.changePercent.formatted(.number.precision(.fractionLength(2))))%")
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(.green)
+                .frame(width: 92, alignment: .leading)
+            Text("\(alert.windowSeconds)초")
+                .foregroundStyle(.secondary)
+            Text("$\(alert.baselinePrice, specifier: "%.2f") → $\(alert.latestPrice, specifier: "%.2f")")
+                .monospacedDigit()
+            Text("거래대금 $\(alert.dollarVolume.formatted(.number.notation(.compactName)))")
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(DateFormatter.liveTime.string(from: alert.detectedAt))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .font(.callout)
+        .padding(11)
+        .background(RoundedRectangle(cornerRadius: 9).fill(Color.green.opacity(0.08)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.green.opacity(0.22)))
+    }
+}
+
 private struct ReportCard: View {
     let report: AnalysisReport
 
@@ -428,7 +539,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 18) {
             Text("데이터 연결 설정")
                 .font(.title2.bold())
-            Text("무료 계정의 키를 입력하면 Mac 키체인에 안전하게 저장됩니다. 처음에는 Massive 키만 입력해 전체시장 스캔부터 시험할 수 있습니다.")
+            Text("사용자 본인의 데이터 키를 입력하면 Mac 키체인에 안전하게 저장됩니다. 무료 Alpaca IEX로 관심종목 감지를 시험하고, 유료 SIP 구독 시 전체 상장주 감지를 선택할 수 있습니다.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Group {

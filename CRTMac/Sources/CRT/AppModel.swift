@@ -18,7 +18,11 @@ final class AppModel: ObservableObject {
     @Published var notificationStatus = "알림 상태 확인 중..."
     @Published var liveTrades: [LiveTrade] = []
     @Published var isLiveRunning = false
-    @Published var liveStatusMessage = "Alpaca 키를 입력하면 관심종목 현재 가격을 확인할 수 있습니다."
+    @Published var liveStatusMessage = "Alpaca 키를 입력하면 실시간 급등 감지를 시험할 수 있습니다."
+    @Published var liveFeed: LiveDataFeed = .iex
+    @Published var scanAllLiveMarket = false
+    @Published var liveRules = LiveScanRules()
+    @Published var liveAlerts: [LiveAlert] = []
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -169,20 +173,44 @@ final class AppModel: ObservableObject {
             errorMessage = "설정에서 Alpaca API Key와 Secret Key를 먼저 입력해주세요."
             return
         }
-        guard !watchlist.isEmpty, watchlist.count <= 30 else {
-            errorMessage = "실시간 미리보기 관심종목은 1개 이상 30개 이하로 입력해주세요."
+        if scanAllLiveMarket, liveFeed != .sip {
+            errorMessage = "전체 상장주 실시간 감지는 유료 SIP 피드를 선택해야 합니다. 무료 IEX에서는 관심종목 감지를 사용해주세요."
             return
+        }
+        if !scanAllLiveMarket {
+            guard !watchlist.isEmpty, watchlist.count <= 30 else {
+                errorMessage = "관심종목 실시간 감지는 1개 이상 30개 이하로 입력해주세요."
+                return
+            }
         }
         errorMessage = nil
         liveTrades = []
+        liveAlerts = []
         isLiveRunning = true
-        liveStatusMessage = "Alpaca IEX 실시간 피드에 연결하고 있습니다..."
-        liveQuoteService.connect(key: key, secret: secret, symbols: watchlist) { [weak self] trade in
+        liveStatusMessage = "Alpaca \(liveFeed.label) 피드에 연결하고 있습니다..."
+        liveQuoteService.connect(
+            key: key,
+            secret: secret,
+            feed: liveFeed,
+            symbols: watchlist,
+            allSymbols: scanAllLiveMarket,
+            rules: liveRules
+        ) { [weak self] trade in
             Task { @MainActor in
                 guard let self else { return }
                 self.liveTrades.removeAll { $0.symbol == trade.symbol }
                 self.liveTrades.append(trade)
                 self.liveTrades.sort { $0.symbol < $1.symbol }
+            }
+        } onAlert: { [weak self] alert in
+            Task { @MainActor in
+                guard let self else { return }
+                self.liveAlerts.insert(alert, at: 0)
+                self.liveAlerts = Array(self.liveAlerts.prefix(100))
+                self.liveStatusMessage = "\(alert.symbol) 급등 후보를 감지했습니다. 뉴스·공시 확인 전 가격 경보입니다."
+                if self.notificationsEnabled {
+                    await self.notificationService.sendLiveAlertNotification(alert)
+                }
             }
         } onStatus: { [weak self] status, isConnected in
             Task { @MainActor in
@@ -195,7 +223,11 @@ final class AppModel: ObservableObject {
     func stopLiveQuotes() {
         liveQuoteService.disconnect()
         isLiveRunning = false
-        liveStatusMessage = "실시간 가격 미리보기를 중지했습니다."
+        liveStatusMessage = "실시간 급등 감지를 중지했습니다."
+    }
+
+    func clearLiveAlerts() {
+        liveAlerts = []
     }
 
     private func beginAnalysis(message: String, operation: @escaping () async throws -> AnalysisResult) {

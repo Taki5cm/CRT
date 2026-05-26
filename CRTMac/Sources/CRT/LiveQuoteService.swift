@@ -3,22 +3,41 @@ import Foundation
 final class LiveQuoteService {
     private var task: URLSessionWebSocketTask?
     private var requestedSymbols: [String] = []
+    private var allSymbols = false
+    private var feed: LiveDataFeed = .iex
+    private var rules = LiveScanRules()
     private var onTrade: ((LiveTrade) -> Void)?
+    private var onAlert: ((LiveAlert) -> Void)?
     private var onStatus: ((String, Bool) -> Void)?
+    private let detector = LiveRapidMoveDetector()
+    private let timestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     func connect(
         key: String,
         secret: String,
+        feed: LiveDataFeed,
         symbols: [String],
+        allSymbols: Bool,
+        rules: LiveScanRules,
         onTrade: @escaping (LiveTrade) -> Void,
+        onAlert: @escaping (LiveAlert) -> Void,
         onStatus: @escaping (String, Bool) -> Void
     ) {
         disconnect()
-        requestedSymbols = symbols
+        requestedSymbols = allSymbols ? ["*"] : symbols
+        self.allSymbols = allSymbols
+        self.feed = feed
+        self.rules = rules
         self.onTrade = onTrade
+        self.onAlert = onAlert
         self.onStatus = onStatus
+        detector.reset()
 
-        guard let url = URL(string: "wss://stream.data.alpaca.markets/v2/iex") else {
+        guard let url = URL(string: "wss://stream.data.alpaca.markets/v2/\(feed.rawValue)") else {
             onStatus("실시간 연결 주소를 만들지 못했습니다.", false)
             return
         }
@@ -77,21 +96,30 @@ final class LiveQuoteService {
         for packet in packets {
             switch packet.type {
             case "success" where packet.message == "authenticated":
-                onStatus?("인증 완료. 관심종목 가격 구독을 시작합니다...", true)
+                onStatus?("인증 완료. 실시간 체결 구독을 시작합니다...", true)
                 subscribe()
             case "subscription":
-                onStatus?("IEX 실시간 가격 수신 중: \(requestedSymbols.joined(separator: ", "))", true)
+                let target = requestedSymbols == ["*"] ? "전체 상장주" : requestedSymbols.joined(separator: ", ")
+                onStatus?("실시간 체결 감지 중: \(target)", true)
             case "t":
                 guard let symbol = packet.symbol, let price = packet.price else { continue }
-                onTrade?(LiveTrade(
+                let receivedAt = Date()
+                let trade = LiveTrade(
                     symbol: symbol,
                     price: price,
                     size: packet.size ?? 0,
-                    receivedAt: Date()
-                ))
+                    occurredAt: packet.timestamp.flatMap(timestampFormatter.date(from:)) ?? receivedAt,
+                    receivedAt: receivedAt
+                )
+                if !allSymbols {
+                    onTrade?(trade)
+                }
+                if let alert = detector.process(trade: trade, rules: rules, feed: feed) {
+                    onAlert?(alert)
+                }
             case "error":
                 let message = packet.message ?? "알 수 없는 오류"
-                onStatus?("Alpaca 실시간 연결 실패: \(message). API Key와 Secret을 확인해주세요.", false)
+                onStatus?("Alpaca 실시간 연결 실패: \(message). 키 또는 선택한 피드 구독 권한을 확인해주세요.", false)
                 disconnect()
             default:
                 continue
@@ -106,6 +134,7 @@ private struct AlpacaStreamPacket: Decodable {
     let symbol: String?
     let price: Double?
     let size: Int?
+    let timestamp: String?
 
     enum CodingKeys: String, CodingKey {
         case type = "T"
@@ -113,5 +142,6 @@ private struct AlpacaStreamPacket: Decodable {
         case symbol = "S"
         case price = "p"
         case size = "s"
+        case timestamp = "t"
     }
 }

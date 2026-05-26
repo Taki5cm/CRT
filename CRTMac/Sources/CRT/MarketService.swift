@@ -117,7 +117,7 @@ actor MarketService {
             minuteBarsChecked: bars.values.reduce(0) { $0 + $1.count },
             shortlistedSymbols: nil,
             warnings: warnings,
-            methodology: "입력한 종목의 SIP 과거 1분봉에서 저가-고가 변동을 검사하고, 급변 시점 주변 뉴스와 당일 SEC 공시를 연결합니다. 체결 순서나 당시 매수 가능성을 의미하지 않습니다."
+            methodology: "무료 계정에서 이용 가능한 IEX 과거 1분봉으로 입력 종목의 변동을 검사하고, 급변 시점 주변 뉴스와 당일 SEC 공시를 연결합니다. IEX는 미국 전체 거래소 자료가 아니며 체결 가능성을 의미하지 않습니다."
         )
     }
 
@@ -207,7 +207,7 @@ actor MarketService {
             URLQueryItem(name: "end", value: "\(addDays(date, 2))T00:00:00Z"),
             URLQueryItem(name: "limit", value: "10000"),
             URLQueryItem(name: "adjustment", value: "split"),
-            URLQueryItem(name: "feed", value: "sip")
+            URLQueryItem(name: "feed", value: "iex")
         ]
         let headers = ["APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret]
         var output = Dictionary(uniqueKeysWithValues: symbols.map { ($0, [MinuteBar]()) })
@@ -311,6 +311,12 @@ actor MarketService {
             }
             if name.hasPrefix("Massive"), status == 403 {
                 throw AnalysisError.remote("Massive 계정에서 이 자료에 접근할 수 없습니다. Stocks 플랜과 API Key 권한을 확인해주세요.")
+            }
+            if name == "Alpaca 과거 분봉", status == 403 {
+                throw AnalysisError.remote("Alpaca 과거 분봉 접근이 거절되었습니다. CRT는 무료 Paper 계정용 IEX 자료를 요청합니다. 앱을 최신 빌드로 다시 실행한 뒤에도 반복되면 Alpaca API Key를 새로 발급해 저장해주세요.")
+            }
+            if name.hasPrefix("Alpaca"), status == 401 {
+                throw AnalysisError.remote("Alpaca API Key 또는 Secret Key 인증에 실패했습니다. Paper Trading 화면에서 발급한 두 키를 설정에 다시 저장해주세요.")
             }
             throw AnalysisError.remote("\(name) 조회에 실패했습니다. 상태 코드: \(status)")
         }

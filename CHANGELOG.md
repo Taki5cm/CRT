@@ -12,7 +12,9 @@
 - 설정에서 켤 수 있는 macOS 분석 완료 알림 추가
 - 후보가 발견되면 알림에 대표 티커와 후보 수 표시
 - Alpaca 무료 IEX 스트림 기반 관심종목 실시간 가격 미리보기 추가
+- Alpaca 무료 Paper 계정 호환을 위해 관심종목 과거 분봉도 IEX 피드로 변경
 - Massive 인증 실패 시 API Key를 확인할 수 있도록 안내 메시지 개선
+- Alpaca 과거 분봉 권한 오류 안내 개선
 
 ### Notification Scope
 

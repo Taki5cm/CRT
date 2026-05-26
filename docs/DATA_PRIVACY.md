@@ -5,7 +5,7 @@
 | 서비스 | 사용 목적 | 앱이 전송하는 정보 |
 | --- | --- | --- |
 | Massive | 전체시장 과거 일별·분봉 후보 분석 | Massive API Key, 날짜, 티커 |
-| Alpaca | 관심종목 과거 분봉·뉴스 분석 및 IEX 실시간 가격 미리보기 | Alpaca API Key/Secret, 날짜, 티커 |
+| Alpaca | IEX 관심종목 과거 분봉·뉴스 분석 및 실시간 가격 미리보기 | Alpaca API Key/Secret, 날짜, 티커 |
 | SEC EDGAR | 당일 공식 공시 확인 | 앱 식별 문자열과 사용자가 설정한 연락 이메일, 조회 CIK |
 
 ## Credential Handling

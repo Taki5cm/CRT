@@ -16,6 +16,7 @@ CRT는 짧은 시간 내 급격한 가격 상승 또는 하락을 발견한 뒤,
 | Live stream | `CRTMac/Sources/CRT/LiveQuoteService.swift` | 사용자 권한에 따른 Alpaca IEX/SIP WebSocket 체결 수신 |
 | Live detection | `CRTMac/Sources/CRT/LiveRapidMoveDetector.swift` | 초 단위 양방향 가격·거래대금 조건 계산과 방향별 중복 경보 제한 |
 | Capture history | `CRTMac/Sources/CRT/CaptureHistoryStore.swift` | 포착 이벤트, 후행 성적, 2차 조사 보고의 SQLite 로컬 저장 및 CSV 내보내기 |
+| Supporter dataset | `CRTMac/Sources/CRT/SupporterDatasetStore.swift` | 역사 급등 후보 대기열과 `+300%` 가격 검증 결과의 별도 SQLite 저장 |
 | Browser prototype | Node.js + static UI | 기능 흐름과 API 동작의 보조 검증 |
 | Automated tests | Node test runner | 핵심 감지 및 결합 로직 회귀 검사 |
 
@@ -101,6 +102,12 @@ CRT는 짧은 시간 내 급격한 가격 상승 또는 하락을 발견한 뒤,
 ## Supporter Model Direction
 
 위험률·기대률 계산에는 감지 시점의 가격/거래대금/세션/뉴스·희석 공시 근거와 포착 후 `1`, `5`, `15`분 수익률 표본이 필요합니다. 모델을 제품에 표시하기 전에 시간 순서가 보존된 검증 구간에서 정확도와 오경보 위험을 확인해야 하므로, 0.9은 가격 표본에 근거 데이터를 붙이되 예측치는 표시하지 않습니다.
+
+## Live Chart And Dataset Foundation In 0.10
+
+`CRT 0.10`은 선택된 종목의 오늘 Alpaca 1분봉을 먼저 요청하고, 시장 감시 연결에서 같은 종목의 체결이 들어오면 현재 1분 캔들에 이어 붙입니다. 화면에서 `3`, `5`, `15`분봉을 고르면 원본 1분 캔들을 로컬에서 집계해 즉시 전환합니다. 관심종목 밖의 차트 조회 티커는 차트용으로만 구독되며 감지기의 급등락 후보 계산에는 넣지 않습니다.
+
+서포터 데이터는 기존 포착 기록과 별개인 `supporter-training.sqlite`에 저장합니다. 최초 화면에는 사용자가 제시한 `BIRD`, `ASTC`, `AIXI` 후보가 검증 대기 상태로 표시되고, 거래일이 입력된 후보는 Alpaca IEX 분봉으로 직전 수신 거래일 종가 대비 장중 고가 변동률을 계산합니다. 이 검증은 데이터 구축의 첫 단계이며 전체시장 확정 표본이나 예측 모델 결과가 아닙니다.
 
 ## Capture Outcomes In 0.7
 

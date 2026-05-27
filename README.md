@@ -2,7 +2,7 @@
   <img src="CRTMac/Resources/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="132" alt="CRT app icon">
 </p>
 
-<h1 align="center">CRT 0.9</h1>
+<h1 align="center">CRT 0.10</h1>
 
 <p align="center">
   <strong>Catalyst Rapid-move Tracker</strong><br>
@@ -12,14 +12,14 @@
 <p align="center">
   <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-black?logo=apple">
   <img alt="SwiftUI" src="https://img.shields.io/badge/SwiftUI-native-0A84FF?logo=swift&logoColor=white">
-  <img alt="Version" src="https://img.shields.io/badge/version-0.9-31D5C8">
+  <img alt="Version" src="https://img.shields.io/badge/version-0.10-31D5C8">
 </p>
 
 ## Overview
 
 `CRT`는 짧은 구간에 급격한 상승 또는 하락이 발생한 미국 주식 후보를 찾고, 그 움직임과 같은 날짜의 공시 또는 시점 주변 뉴스를 함께 확인하는 조사 도구입니다.
 
-현재 `CRT 0.9`은 **사용자가 자신의 API Key를 연결해 자기 Mac에서 계속 실행하는 시장 감시 베타**입니다. 포착 이벤트와 이후 `1`, `5`, `15`분 결과를 저장하고, Alpaca 뉴스·SEC 최근 공시·선택적 Massive 기업 규모를 자동 조사합니다. 전체시장 사후 후보에도 뉴스 연결을 시도하며, SEC 종목 목록이 막힐 때는 Massive CIK를 통해 제출 이력으로 연결합니다. 내부 빌드 버전은 `0.9.0`입니다.
+현재 `CRT 0.10`은 **사용자가 자신의 API Key를 연결해 자기 Mac에서 계속 실행하는 시장 감시 베타**입니다. 포착 이벤트와 이후 `1`, `5`, `15`분 결과를 저장하고, 선택 종목의 실시간 분봉 차트를 제공하며, 역사적 `+300%` 급등 후보를 검증해 Supporter ML 데이터셋 기반을 쌓습니다. 내부 빌드 버전은 `0.10.0`입니다.
 
 ## What It Does
 
@@ -41,8 +41,9 @@
 | 자동 2차 조사 | Alpaca News, SEC EDGAR, Massive details | 포착 후 뉴스·최근 공시·기업 규모를 조사하고 희석 관련 양식을 경고 |
 | 교차 확인 링크 | Stock Titan, Google News | API 뉴스가 없거나 추가 확인이 필요할 때 종목별 뉴스 페이지를 바로 열기 |
 | 재알림 제어 | 로컬 설정 | 없음부터 30분까지 선택하며 감시 중 변경을 즉시 적용 |
+| 실시간 분봉 차트 | Alpaca bars/WebSocket | 선택 종목의 오늘 캔들을 표시하고 `1·3·5·15분봉` 전환 및 체결 갱신 |
 | CSV 내보내기 | 로컬 파일 | 후행 성적과 2차 조사 항목을 사용자가 선택한 위치에 내보내 후속 검토 가능 |
-| 위험·기대 분석 서포터 | 저장된 검증 표본 | 실제 표본을 수집하되 검증 전에는 확률 예측치를 표시하지 않음 |
+| Supporter ML 데이터셋 | Alpaca bars, 로컬 SQLite | `+300%` 후보를 가격 검증해 사건·대조 표본으로 저장하며 예측치는 아직 표시하지 않음 |
 | 자격정보 보관 | macOS Keychain | Mac 앱에서 API 키를 로컬 키체인에 저장 |
 
 ## Analysis Flow
@@ -83,7 +84,7 @@ cd CRTMac
 생성 파일:
 
 - `CRTMac/build/CRT.app`
-- `CRTMac/build/CRT-0.9.zip`
+- `CRTMac/build/CRT-0.10.zip`
 
 현재 배포 파일은 개인 테스트용 ad-hoc 서명 빌드입니다. 일반 사용자에게 경고 없는 설치 경험을 제공하려면 Apple Developer 서명과 공증 절차가 추가로 필요합니다.
 
@@ -93,11 +94,11 @@ cd CRTMac
 | --- | --- | --- |
 | 전체시장 사후 후보 탐색 | Massive Stocks Basic API Key | 과거 일별 데이터와 후보별 분봉 확인 |
 | 관심종목 뉴스 포함 조사 | Alpaca API Key / Secret Key | 무료 IEX 지난 날짜 분봉 및 과거 뉴스 조회 |
-| 관심종목 실시간 감지 | Alpaca API Key / Secret Key | 무료 IEX 실시간 스트림, 최대 30개 종목 |
+| 관심종목 실시간 감지·차트 | Alpaca API Key / Secret Key | 무료 IEX 실시간 스트림 및 선택 종목 분봉, 최대 30개 감시 종목 |
 | 전체 상장주 실시간 감지 | Alpaca SIP 접근 권한 및 키 | 사용자가 직접 구독한 SIP 실시간 스트림 |
 | 공식 공시 연결 | 연락 이메일 | SEC EDGAR 요청의 사용자 식별용 헤더에 사용 |
 
-2026년 5월 28일 확인 기준, Alpaca Basic에서 구독 없이 사용할 수 있는 주식 실시간 피드는 IEX이며 WebSocket은 최대 30개 종목입니다. Massive 공식 문서는 Ticker Overview가 `CIK`, `market_cap`, `share_class_shares_outstanding`, `weighted_shares_outstanding`를 제공한다고 안내합니다. SEC EDGAR submissions API는 인증 키 없이 CIK별 제출 내역 JSON을 제공하며, CRT는 사용자가 설정한 연락 이메일을 요청 식별에 사용합니다. `CRT 0.9`의 TOP 20은 앱이 직접 받은 스트림으로 계산합니다.
+2026년 5월 28일 확인 기준, Alpaca Basic에서 구독 없이 사용할 수 있는 주식 실시간 피드는 IEX이며 WebSocket은 최대 30개 종목입니다. Massive 공식 문서는 Ticker Overview가 `CIK`, `market_cap`, `share_class_shares_outstanding`, `weighted_shares_outstanding`를 제공한다고 안내합니다. SEC EDGAR submissions API는 인증 키 없이 CIK별 제출 내역 JSON을 제공하며, CRT는 사용자가 설정한 연락 이메일을 요청 식별에 사용합니다. `CRT 0.10`의 TOP 20과 차트 실시간 갱신은 앱이 직접 받은 스트림으로 계산합니다.
 
 ## Repository Layout
 
@@ -119,10 +120,11 @@ cd CRTMac
 - 앱은 Massive, Alpaca, SEC를 브라우저 자동검색으로 긁는 방식이 아니라 공식 API 요청으로 연결합니다.
 - 시세 후보 분석이 성공했다면, 뉴스 또는 공시 조회 실패는 경고로 표시하고 분석 결과 자체는 유지합니다.
 - 브라우저 시험판은 입력한 키를 저장하지 않습니다. Mac 앱은 키를 macOS Keychain에 저장합니다.
-- `CRT 0.9`의 시장 감시는 사용자가 중지할 때까지 연결을 유지하며, 일시적인 단절이 발생하면 자동 재연결을 시도합니다.
+- `CRT 0.10`의 시장 감시는 사용자가 중지할 때까지 연결을 유지하며, 일시적인 단절이 발생하면 자동 재연결을 시도합니다.
 - 감지 판단은 감시를 시작한 뒤 앱이 실제로 수신한 체결 두 건 이상을 비교합니다. 이미 끝난 급등은 실시간 경보로 소급 표시하지 않습니다.
 - TOP 20의 `전체시장` 의미는 SIP 모드에서만 성립합니다. IEX 모드에서는 사용자가 입력한 관심종목 중 수신된 변동 순위입니다.
 - 포착 기록과 2차 보고는 `Application Support/CRT/capture-history.sqlite`에 로컬 저장되며 CSV 내보내기에 API 키는 포함되지 않습니다.
+- 역사적 급등 검증 대기열과 가격 검증 결과는 `Application Support/CRT/supporter-training.sqlite`에 별도로 저장됩니다.
 - SEC 희석 경고는 양식 존재를 알려주는 것이며 실제 발행 완료나 가격 방향을 단정하지 않습니다.
 - float, 소유주주비율, short interest는 신뢰 가능한 추가 데이터 권한이 확보되기 전에는 표시하지 않습니다.
 - 후행 결과는 포착 후 1·5·15분을 지난 뒤 처음 들어온 체결 기준이며, 30분 안에 충분한 후속 체결을 받지 못하면 `후속 수신 누락`으로 분리합니다.
@@ -138,6 +140,7 @@ cd CRTMac
 - [Architecture](docs/ARCHITECTURE.md)
 - [Data, Privacy and Limitations](docs/DATA_PRIVACY.md)
 - [Versioning and Rollback](docs/VERSIONING.md)
+- [Supporter ML Dataset Plan](docs/SUPPORTER_ML_DATASET.md)
 
 ## Web Prototype
 
@@ -179,7 +182,8 @@ npm test
 | `CRT 0.7` | 로컬 포착 기록 DB, 1·5·15분 사후 성적표, CSV 내보내기 |
 | `CRT 0.8` | 포착 후 뉴스·SEC 희석 공시·기업 규모 자동 2차 보고 |
 | `CRT 0.9` | SEC 403 회복 경로, 전체시장 뉴스, 외부 교차검색, 재알림 제어, 대시보드 UI |
-| 다음 단계 | 신뢰 가능한 float·short interest 데이터 검토, 축적 결과 비교 |
+| `CRT 0.10` | 300% 이상 역사적 급등 사건과 위험·대조 표본을 저장하는 Supporter ML 데이터셋 기반 |
+| 다음 단계 | 전체시장 역사 데이터 수집 확대, 신뢰 가능한 float·short interest 검토, 시간 순서 모델 검증 |
 | 이후 검토 | 배포용 서명·공증과 온보딩 개선 |
 
 ## Version Records

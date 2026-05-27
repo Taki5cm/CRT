@@ -59,7 +59,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.9")
+                Text("0.10")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -76,7 +76,7 @@ struct ContentView: View {
                 SignalChip(title: "LIVE", detail: model.isLiveRunning ? "CONNECTED" : "STANDBY", color: model.isLiveRunning ? .green : .secondary)
                 SignalChip(title: "FEED", detail: model.liveMonitoringMode.feed.rawValue.uppercased(), color: .cyan)
                 SignalChip(title: "EVIDENCE", detail: "NEWS + SEC", color: Color(red: 0.79, green: 0.97, blue: 0.38))
-                SignalChip(title: "LOCAL DB", detail: "v\(CaptureHistoryStore.schemaVersion)", color: .purple)
+                SignalChip(title: "DATASET", detail: "ML v\(SupporterDatasetStore.schemaVersion)", color: .purple)
             }
         }
     }
@@ -352,6 +352,8 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(model.isLiveRunning ? Color(red: 0.79, green: 0.97, blue: 0.38) : .secondary)
 
+                intradayChart
+
                 if model.isLiveRunning {
                     HStack(spacing: 12) {
                         Metric(title: "수신 체결", value: "\(model.liveReceivedTradeCount.formatted())건")
@@ -385,7 +387,9 @@ struct ContentView: View {
                         .foregroundStyle(.secondary)
                     VStack(spacing: 6) {
                         ForEach(Array(model.liveMovers.enumerated()), id: \.element.id) { index, movement in
-                            LiveMovementRow(rank: index + 1, movement: movement)
+                            LiveMovementRow(rank: index + 1, movement: movement) {
+                                model.showChart(for: movement.symbol)
+                            }
                         }
                     }
                 }
@@ -403,7 +407,9 @@ struct ContentView: View {
                             .foregroundStyle(.secondary)
                     }
                     ForEach(model.liveAlerts.prefix(8)) { alert in
-                        LiveAlertCard(alert: alert)
+                        LiveAlertCard(alert: alert) {
+                            model.showChart(for: alert.symbol)
+                        }
                     }
                 }
 
@@ -426,6 +432,9 @@ struct ContentView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(10)
                             .background(RoundedRectangle(cornerRadius: 8).fill(.white.opacity(0.04)))
+                            .onTapGesture {
+                                model.showChart(for: trade.symbol)
+                            }
                         }
                     }
                 }
@@ -434,13 +443,18 @@ struct ContentView: View {
         }
     }
 
+    private var intradayChart: some View {
+        IntradayChartPanel()
+            .environmentObject(model)
+    }
+
     private var supporterAI: some View {
         GroupBox {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("위험·기대 분석 서포터")
+                    Text("Supporter ML 데이터셋")
                         .font(.title3.bold())
-                    Text("기록 수집 중")
+                    Text("0.10 · 검증 수집")
                         .font(.caption.bold())
                         .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
                         .padding(.horizontal, 8)
@@ -448,16 +462,42 @@ struct ContentView: View {
                         .background(Capsule().fill(Color(red: 0.79, green: 0.97, blue: 0.38).opacity(0.13)))
                     Spacer()
                 }
-                Text("0.7부터 실제 포착 뒤의 추가 상승, 급락, 되돌림 결과를 저장합니다. 충분한 기록이 쌓이면 조건별 과거 사례 비교와 검증을 진행할 수 있습니다.")
+                Text("과거 300% 이상 급등 사건과 유사하지만 급등하지 않은 대조 표본을 함께 축적합니다. 검증된 데이터가 쌓이기 전에는 기대률이나 매매 판단을 표시하지 않습니다.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 12) {
-                    Metric(title: "저장된 표본", value: "\(model.captureRecords.count)건")
-                    Metric(title: "학습 대상", value: "포착 후 1·5·15분")
-                    Metric(title: "입력 근거", value: "가격·거래대금·뉴스")
+                    Metric(title: "검증 대기열", value: "\(model.supporterCandidates.count)건")
+                    Metric(title: "300% 확인", value: "\(model.supporterCandidates.filter { $0.status == .qualifies }.count)건")
+                    Metric(title: "대조 표본", value: "\(model.supporterCandidates.filter { $0.status == .comparison }.count)건")
                     Metric(title: "현재 표시", value: "예측치 미제공")
                 }
-                Text("검증되지 않은 확률을 투자 판단처럼 보여주지 않기 위해, 충분한 과거 표본과 성능 검증이 준비되기 전에는 상승 기대률·하락 위험률 숫자를 표시하지 않습니다.")
+
+                HStack(spacing: 10) {
+                    TextField("티커 (예: ASTC)", text: $model.supporterSymbolText)
+                        .frame(width: 150)
+                    TextField("거래일 YYYY-MM-DD", text: $model.supporterDateText)
+                        .frame(width: 175)
+                    Button("후보 추가") { model.addSupporterCandidate() }
+                        .buttonStyle(.borderedProminent)
+                    Text("BIRD, ASTC, AIXI는 초기 확인 대기열에 포함되어 있습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .textFieldStyle(.roundedBorder)
+
+                Text(model.supporterStatus)
+                    .font(.caption)
+                    .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
+
+                ForEach(model.supporterCandidates.prefix(8)) { candidate in
+                    SupporterCandidateRow(candidate: candidate) {
+                        model.verifySupporterCandidate(candidate)
+                    } onPrepare: {
+                        model.prepareCandidateEntry(from: candidate)
+                    }
+                }
+
+                Text("검증은 현재 연결된 Alpaca IEX 분봉을 사용합니다. 전체시장 학습 자료로 확장할 때는 SIP 또는 라이선스가 확인된 전체시장 역사 자료가 필요합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -679,8 +719,155 @@ private struct Metric: View {
     }
 }
 
+private struct IntradayChartPanel: View {
+    @EnvironmentObject private var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("실시간 차트")
+                        .font(.headline.bold())
+                    Text("감시·조회 종목의 분봉 흐름을 한눈에 확인합니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                TextField("티커", text: $model.chartSymbolText)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 100)
+                    .onSubmit { model.applyChartSymbol() }
+                Button("조회") { model.applyChartSymbol() }
+                    .buttonStyle(.bordered)
+                Picker("봉", selection: $model.chartInterval) {
+                    ForEach(ChartInterval.allCases) { interval in
+                        Text(interval.label).tag(interval)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 208)
+                Button {
+                    model.refreshIntradayChart()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            HStack(spacing: 12) {
+                Metric(title: "종목", value: model.selectedChartSymbol)
+                Metric(title: "현재 봉", value: latestPrice)
+                Metric(title: "표시 구간 변화", value: displayedChange)
+                Metric(title: "봉 간격", value: model.chartInterval.label)
+                if model.chartIsLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            CandleCanvas(candles: Array(model.chartCandles.suffix(84)))
+                .frame(height: 245)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.black.opacity(0.22))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.065)))
+                )
+
+            Text(model.chartStatus)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.cyan.opacity(0.035))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.cyan.opacity(0.13)))
+        )
+    }
+
+    private var latestPrice: String {
+        model.chartCandles.last.map { "$\(String(format: "%.2f", $0.close))" } ?? "--"
+    }
+
+    private var displayedChange: String {
+        guard let first = model.chartCandles.first, let last = model.chartCandles.last, first.open > 0 else { return "--" }
+        return String(format: "%+.2f%%", ((last.close - first.open) / first.open) * 100)
+    }
+}
+
+private struct CandleCanvas: View {
+    let candles: [PriceCandle]
+
+    var body: some View {
+        if candles.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "chart.xyaxis.line")
+                    .font(.title2)
+                Text("분봉 자료를 불러오면 여기에 캔들 차트가 표시됩니다.")
+                    .font(.caption)
+            }
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            Canvas { context, size in
+                let plotRect = CGRect(x: 12, y: 12, width: size.width - 72, height: size.height - 40)
+                let lowest = candles.map(\.low).min() ?? 0
+                let highest = candles.map(\.high).max() ?? lowest + 1
+                let range = max(highest - lowest, max(highest * 0.002, 0.01))
+                let candleWidth = max(2, min(10, plotRect.width / CGFloat(candles.count) * 0.64))
+                let step = plotRect.width / CGFloat(max(candles.count, 1))
+                func y(_ price: Double) -> CGFloat {
+                    plotRect.maxY - CGFloat((price - lowest) / range) * plotRect.height
+                }
+
+                for line in 0...4 {
+                    let lineY = plotRect.minY + (plotRect.height / 4) * CGFloat(line)
+                    var path = Path()
+                    path.move(to: CGPoint(x: plotRect.minX, y: lineY))
+                    path.addLine(to: CGPoint(x: plotRect.maxX, y: lineY))
+                    context.stroke(path, with: .color(.white.opacity(0.06)), lineWidth: 1)
+                    let price = highest - range * Double(line) / 4
+                    context.draw(
+                        Text("$\(String(format: "%.2f", price))").font(.caption2).foregroundStyle(.secondary),
+                        at: CGPoint(x: plotRect.maxX + 7, y: lineY),
+                        anchor: .leading
+                    )
+                }
+
+                for (index, candle) in candles.enumerated() {
+                    let centerX = plotRect.minX + step * (CGFloat(index) + 0.5)
+                    let color: Color = candle.close >= candle.open ? .green : .red
+                    var wick = Path()
+                    wick.move(to: CGPoint(x: centerX, y: y(candle.high)))
+                    wick.addLine(to: CGPoint(x: centerX, y: y(candle.low)))
+                    context.stroke(wick, with: .color(color.opacity(0.8)), lineWidth: 1)
+                    let top = min(y(candle.open), y(candle.close))
+                    let height = max(abs(y(candle.open) - y(candle.close)), 1.5)
+                    let body = CGRect(x: centerX - candleWidth / 2, y: top, width: candleWidth, height: height)
+                    context.fill(Path(roundedRect: body, cornerRadius: 1), with: .color(color.opacity(0.92)))
+                }
+
+                if let latest = candles.last {
+                    let currentY = y(latest.close)
+                    var currentPath = Path()
+                    currentPath.move(to: CGPoint(x: plotRect.minX, y: currentY))
+                    currentPath.addLine(to: CGPoint(x: plotRect.maxX, y: currentY))
+                    context.stroke(currentPath, with: .color(.cyan.opacity(0.42)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                }
+
+                if let first = candles.first, let last = candles.last {
+                    context.draw(Text(DateFormatter.liveTime.string(from: first.startedAt)).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: plotRect.minX, y: plotRect.maxY + 16), anchor: .leading)
+                    context.draw(Text(DateFormatter.liveTime.string(from: last.startedAt)).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: plotRect.maxX, y: plotRect.maxY + 16), anchor: .trailing)
+                }
+            }
+        }
+    }
+}
+
 private struct LiveAlertCard: View {
     let alert: LiveAlert
+    let onSelect: () -> Void
 
     var body: some View {
         HStack(spacing: 16) {
@@ -709,6 +896,8 @@ private struct LiveAlertCard: View {
         .padding(11)
         .background(RoundedRectangle(cornerRadius: 9).fill(cardColor.opacity(0.08)))
         .overlay(RoundedRectangle(cornerRadius: 9).stroke(cardColor.opacity(0.22)))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
     }
 
     private var cardColor: Color {
@@ -719,6 +908,7 @@ private struct LiveAlertCard: View {
 private struct LiveMovementRow: View {
     let rank: Int
     let movement: LiveMovement
+    let onSelect: () -> Void
 
     var body: some View {
         HStack(spacing: 14) {
@@ -751,10 +941,70 @@ private struct LiveMovementRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: 8).fill(color.opacity(0.055)))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onSelect)
     }
 
     private var color: Color {
         movement.direction == .rising ? .green : .red
+    }
+}
+
+private struct SupporterCandidateRow: View {
+    let candidate: SupporterCandidate
+    let onVerify: () -> Void
+    let onPrepare: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(candidate.symbol)
+                .font(.callout.bold())
+                .frame(width: 58, alignment: .leading)
+            Text(candidate.eventDate ?? "거래일 필요")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(candidate.eventDate == nil ? .orange : .secondary)
+                .frame(width: 105, alignment: .leading)
+            Text(candidate.status.label)
+                .font(.caption.bold())
+                .foregroundStyle(statusColor)
+                .frame(width: 92, alignment: .leading)
+            if let change = candidate.changePercent {
+                Text(String(format: "%+.2f%%", change))
+                    .font(.callout.monospacedDigit().bold())
+                    .foregroundStyle(change >= 0 ? .green : .red)
+                    .frame(width: 84, alignment: .trailing)
+            } else {
+                Text("--")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 84, alignment: .trailing)
+            }
+            Text(candidate.verificationNote ?? candidate.note)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Spacer()
+            if candidate.eventDate == nil {
+                Button("날짜 입력", action: onPrepare)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            } else {
+                Button("가격 검증", action: onVerify)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.035)))
+    }
+
+    private var statusColor: Color {
+        switch candidate.status {
+        case .pending: return .orange
+        case .qualifies: return .green
+        case .comparison: return .cyan
+        case .failed: return .red
+        }
     }
 }
 

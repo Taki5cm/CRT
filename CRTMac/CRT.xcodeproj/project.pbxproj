@@ -19,6 +19,7 @@
 		A10000000000000000000010 /* LiveRapidMoveDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* LiveRapidMoveDetector.swift */; };
 		A10000000000000000000011 /* CaptureHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* CaptureHistoryStore.swift */; };
 		A10000000000000000000012 /* libsqlite3.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* libsqlite3.tbd */; };
+		A10000000000000000000013 /* SupporterDatasetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* SupporterDatasetStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -36,6 +37,7 @@
 		A20000000000000000000012 /* LiveRapidMoveDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveRapidMoveDetector.swift; sourceTree = "<group>"; };
 		A20000000000000000000013 /* CaptureHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureHistoryStore.swift; sourceTree = "<group>"; };
 		A20000000000000000000014 /* libsqlite3.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libsqlite3.tbd; path = usr/lib/libsqlite3.tbd; sourceTree = SDKROOT; };
+		A20000000000000000000015 /* SupporterDatasetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupporterDatasetStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,6 +76,7 @@
 				A20000000000000000000011 /* LiveQuoteService.swift */,
 				A20000000000000000000012 /* LiveRapidMoveDetector.swift */,
 				A20000000000000000000013 /* CaptureHistoryStore.swift */,
+				A20000000000000000000015 /* SupporterDatasetStore.swift */,
 			);
 			path = Sources/CRT;
 			sourceTree = "<group>";
@@ -166,6 +169,7 @@
 				A10000000000000000000009 /* LiveQuoteService.swift in Sources */,
 				A10000000000000000000010 /* LiveRapidMoveDetector.swift in Sources */,
 				A10000000000000000000011 /* CaptureHistoryStore.swift in Sources */,
+				A10000000000000000000013 /* SupporterDatasetStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -200,7 +204,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				ENABLE_HARDENED_RUNTIME = YES;
 				EXECUTABLE_NAME = CRT;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -210,7 +214,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.taki5cm.crt.beta;
 				PRODUCT_NAME = CRT;
 				SDKROOT = macosx;
@@ -224,7 +228,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				ENABLE_HARDENED_RUNTIME = YES;
 				EXECUTABLE_NAME = CRT;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -234,7 +238,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 0.9.0;
+				MARKETING_VERSION = 0.10.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.taki5cm.crt.beta;
 				PRODUCT_NAME = CRT;
 				SDKROOT = macosx;

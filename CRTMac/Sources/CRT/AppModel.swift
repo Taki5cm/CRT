@@ -42,6 +42,18 @@ final class AppModel: ObservableObject {
     @Published var captureRecords: [CaptureRecord] = []
     @Published var captureHistoryStatus = "포착 기록 저장소를 준비하고 있습니다..."
     @Published var catalystStatusMessage = "포착 후 뉴스·공시·기업 규모를 자동으로 조사합니다."
+    @Published var chartSymbolText = "AAPL"
+    @Published var selectedChartSymbol = "AAPL"
+    @Published var chartInterval: ChartInterval = .oneMinute {
+        didSet { rebuildDisplayedCandles() }
+    }
+    @Published var chartCandles: [PriceCandle] = []
+    @Published var chartIsLoading = false
+    @Published var chartStatus = "종목을 선택하면 오늘의 분봉 차트를 불러옵니다."
+    @Published var supporterCandidates: [SupporterCandidate] = []
+    @Published var supporterSymbolText = "BIRD"
+    @Published var supporterDateText = ""
+    @Published var supporterStatus = "300% 이상 급등 사례와 대조 표본을 검증해 저장합니다."
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -53,6 +65,8 @@ final class AppModel: ObservableObject {
     private let notificationService = NotificationService()
     private let liveQuoteService = LiveQuoteService()
     private var captureHistoryStore: CaptureHistoryStore?
+    private var supporterDatasetStore: SupporterDatasetStore?
+    private var rawChartCandles: [PriceCandle] = []
     private var lastCaptureRefreshAt = Date.distantPast
 
     init() {
@@ -68,7 +82,9 @@ final class AppModel: ObservableObject {
         if UserDefaults.standard.object(forKey: "liveCooldownSeconds") != nil {
             liveRules.cooldownSeconds = UserDefaults.standard.integer(forKey: "liveCooldownSeconds")
         }
+        supporterDateText = selectedDateString
         prepareCaptureHistory()
+        prepareSupporterDataset()
         Task { await refreshNotificationStatus() }
     }
 
@@ -220,6 +236,7 @@ final class AppModel: ObservableObject {
         isLiveRunning = true
         liveStartedAt = Date()
         liveStatusMessage = "\(liveMonitoringMode.label) 연결을 시작하고 있습니다..."
+        refreshIntradayChart()
         liveQuoteService.connect(
             key: key,
             secret: secret,
@@ -227,6 +244,7 @@ final class AppModel: ObservableObject {
             symbols: watchlist,
             allSymbols: liveMonitoringMode.scansAllSymbols,
             outcomeSymbols: Array(Set(captureRecords.filter { $0.status == .tracking }.map(\.symbol))),
+            chartSymbol: selectedChartSymbol,
             rules: liveRules
         ) { [weak self] trade in
             Task { @MainActor in
@@ -234,6 +252,7 @@ final class AppModel: ObservableObject {
                 self.liveTrades.removeAll { $0.symbol == trade.symbol }
                 self.liveTrades.append(trade)
                 self.liveTrades.sort { $0.symbol < $1.symbol }
+                self.appendChartTrade(trade)
             }
         } onAlert: { [weak self] alert in
             Task { @MainActor in
@@ -278,6 +297,101 @@ final class AppModel: ObservableObject {
 
     func clearLiveAlerts() {
         liveAlerts = []
+    }
+
+    func showChart(for symbol: String) {
+        let normalized = symbol.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            errorMessage = "차트에서 확인할 종목 기호를 입력해주세요."
+            return
+        }
+        selectedChartSymbol = normalized
+        chartSymbolText = normalized
+        liveQuoteService.updateChartSymbol(normalized)
+        refreshIntradayChart()
+    }
+
+    func applyChartSymbol() {
+        showChart(for: chartSymbolText)
+    }
+
+    func refreshIntradayChart() {
+        let key = alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let secret = alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+        let symbol = selectedChartSymbol
+        guard !key.isEmpty, !secret.isEmpty else {
+            chartStatus = "Alpaca 키를 설정하면 \(symbol)의 오늘 분봉을 조회합니다."
+            return
+        }
+        chartIsLoading = true
+        chartStatus = "\(symbol) \(chartInterval.label) 차트를 불러오고 있습니다..."
+        Task {
+            defer { chartIsLoading = false }
+            do {
+                let candles = try await service.loadIntradayChart(
+                    symbol: symbol,
+                    alpacaKey: key,
+                    alpacaSecret: secret,
+                    feed: liveMonitoringMode.feed
+                )
+                guard symbol == selectedChartSymbol else { return }
+                rawChartCandles = candles
+                rebuildDisplayedCandles()
+                chartStatus = candles.isEmpty
+                    ? "\(symbol)의 오늘 수신 가능한 분봉이 아직 없습니다."
+                    : "\(symbol) · \(liveMonitoringMode.feed.rawValue.uppercased()) 분봉 \(candles.count)개 · 감시 중 체결은 현재 봉에 반영됩니다."
+            } catch {
+                chartStatus = error.localizedDescription
+            }
+        }
+    }
+
+    func addSupporterCandidate() {
+        guard let supporterDatasetStore else { return }
+        let symbol = supporterSymbolText.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let date = supporterDateText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !symbol.isEmpty, DateFormatter.isoDate.date(from: date) != nil else {
+            errorMessage = "학습 후보 티커와 거래일을 입력해주세요. 날짜 형식은 2026-05-27입니다."
+            return
+        }
+        do {
+            try supporterDatasetStore.addCandidate(symbol: symbol, eventDate: date, note: "사용자 등록 검증 후보")
+            refreshSupporterCandidates()
+            supporterStatus = "\(symbol) \(date) 후보를 검증 대기열에 추가했습니다."
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func prepareCandidateEntry(from candidate: SupporterCandidate) {
+        supporterSymbolText = candidate.symbol
+        supporterDateText = candidate.eventDate ?? selectedDateString
+    }
+
+    func verifySupporterCandidate(_ candidate: SupporterCandidate) {
+        guard let date = candidate.eventDate else {
+            prepareCandidateEntry(from: candidate)
+            supporterStatus = "\(candidate.symbol)의 급등 거래일을 입력해 새 검증 후보로 추가해주세요."
+            return
+        }
+        supporterStatus = "\(candidate.symbol) \(date)의 가격 경로를 확인하고 있습니다..."
+        Task {
+            do {
+                let result = try await service.verifySupporterCandidate(
+                    symbol: candidate.symbol,
+                    date: date,
+                    alpacaKey: alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                    alpacaSecret: alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+                )
+                try supporterDatasetStore?.saveVerification(result, for: candidate.id)
+                refreshSupporterCandidates()
+                supporterStatus = "\(candidate.symbol): \(String(format: "%+.2f", result.changePercent))% · \(result.qualifies ? "300% 사건 표본으로 확인" : "대조 표본으로 저장")"
+            } catch {
+                try? supporterDatasetStore?.markFailed(id: candidate.id, note: error.localizedDescription)
+                refreshSupporterCandidates()
+                supporterStatus = error.localizedDescription
+            }
+        }
     }
 
     func refreshCaptureHistory() {
@@ -377,6 +491,54 @@ final class AppModel: ObservableObject {
         } catch {
             captureHistoryStatus = error.localizedDescription
         }
+    }
+
+    private func prepareSupporterDataset() {
+        do {
+            supporterDatasetStore = try SupporterDatasetStore()
+            refreshSupporterCandidates()
+        } catch {
+            supporterStatus = error.localizedDescription
+        }
+    }
+
+    private func refreshSupporterCandidates() {
+        do {
+            supporterCandidates = try supporterDatasetStore?.fetchCandidates() ?? []
+        } catch {
+            supporterStatus = error.localizedDescription
+        }
+    }
+
+    private func rebuildDisplayedCandles() {
+        chartCandles = PriceCandle.aggregated(rawChartCandles, interval: chartInterval)
+    }
+
+    private func appendChartTrade(_ trade: LiveTrade) {
+        guard trade.symbol == selectedChartSymbol else { return }
+        let minuteStart = Date(timeIntervalSince1970: floor(trade.occurredAt.timeIntervalSince1970 / 60) * 60)
+        if let index = rawChartCandles.lastIndex(where: { $0.startedAt == minuteStart }) {
+            let existing = rawChartCandles[index]
+            rawChartCandles[index] = PriceCandle(
+                startedAt: minuteStart,
+                open: existing.open,
+                high: max(existing.high, trade.price),
+                low: min(existing.low, trade.price),
+                close: trade.price,
+                volume: existing.volume + Double(trade.size)
+            )
+        } else {
+            rawChartCandles.append(PriceCandle(
+                startedAt: minuteStart,
+                open: trade.price,
+                high: trade.price,
+                low: trade.price,
+                close: trade.price,
+                volume: Double(trade.size)
+            ))
+            rawChartCandles.sort { $0.startedAt < $1.startedAt }
+        }
+        rebuildDisplayedCandles()
     }
 
     private func saveCapture(_ alert: LiveAlert) {

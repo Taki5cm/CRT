@@ -60,6 +60,52 @@ struct LiveTrade: Identifiable {
     let receivedAt: Date
 }
 
+enum ChartInterval: Int, CaseIterable, Identifiable {
+    case oneMinute = 1
+    case threeMinutes = 3
+    case fiveMinutes = 5
+    case fifteenMinutes = 15
+
+    var id: Int { rawValue }
+    var label: String { "\(rawValue)분" }
+    var seconds: TimeInterval { TimeInterval(rawValue * 60) }
+}
+
+struct PriceCandle: Identifiable {
+    var id: Date { startedAt }
+    let startedAt: Date
+    let open: Double
+    let high: Double
+    let low: Double
+    let close: Double
+    let volume: Double
+
+    var changePercent: Double {
+        guard open > 0 else { return 0 }
+        return ((close - open) / open) * 100
+    }
+
+    static func aggregated(_ candles: [PriceCandle], interval: ChartInterval) -> [PriceCandle] {
+        guard interval != .oneMinute else { return candles.sorted { $0.startedAt < $1.startedAt } }
+        let seconds = interval.seconds
+        let grouped = Dictionary(grouping: candles) { candle in
+            Date(timeIntervalSince1970: floor(candle.startedAt.timeIntervalSince1970 / seconds) * seconds)
+        }
+        return grouped.map { startedAt, values in
+            let ordered = values.sorted { $0.startedAt < $1.startedAt }
+            return PriceCandle(
+                startedAt: startedAt,
+                open: ordered.first?.open ?? 0,
+                high: ordered.map(\.high).max() ?? 0,
+                low: ordered.map(\.low).min() ?? 0,
+                close: ordered.last?.close ?? 0,
+                volume: ordered.reduce(0) { $0 + $1.volume }
+            )
+        }
+        .sorted { $0.startedAt < $1.startedAt }
+    }
+}
+
 enum LiveDataFeed: String, CaseIterable, Identifiable {
     case iex
     case sip
@@ -318,6 +364,43 @@ struct CaptureRecord: Identifiable {
         guard detectedPrice > 0 else { return 0 }
         return ((minPrice - detectedPrice) / detectedPrice) * 100
     }
+}
+
+enum SupporterCandidateStatus: String {
+    case pending
+    case qualifies
+    case comparison
+    case failed
+
+    var label: String {
+        switch self {
+        case .pending: return "검증 대기"
+        case .qualifies: return "300% 사건 확인"
+        case .comparison: return "대조 표본"
+        case .failed: return "검증 실패"
+        }
+    }
+}
+
+struct SupporterCandidate: Identifiable {
+    let id: String
+    let symbol: String
+    let eventDate: String?
+    let note: String
+    let status: SupporterCandidateStatus
+    let baselinePrice: Double?
+    let peakPrice: Double?
+    let changePercent: Double?
+    let verifiedAt: Date?
+    let verificationNote: String?
+}
+
+struct SupporterVerificationResult {
+    let baselinePrice: Double
+    let peakPrice: Double
+    let changePercent: Double
+    let qualifies: Bool
+    let note: String
 }
 
 struct AnalysisResult {

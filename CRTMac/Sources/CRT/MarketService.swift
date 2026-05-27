@@ -147,6 +147,71 @@ actor MarketService {
         )
     }
 
+    func loadIntradayChart(
+        symbol: String,
+        alpacaKey: String,
+        alpacaSecret: String,
+        feed: LiveDataFeed
+    ) async throws -> [PriceCandle] {
+        guard !alpacaKey.isEmpty, !alpacaSecret.isEmpty else {
+            throw AnalysisError.missingCredential("설정에서 Alpaca API Key와 Secret Key를 먼저 저장해주세요.")
+        }
+        let today = easternDate(Date())
+        let bars = try await alpacaSingleSymbolBars(
+            key: alpacaKey,
+            secret: alpacaSecret,
+            symbol: symbol,
+            start: "\(today)T00:00:00Z",
+            end: ISO8601DateFormatter.captureQuery.string(from: Date().addingTimeInterval(60)),
+            feed: feed
+        )
+        return bars.filter { easternDate($0.timestamp) == today }.map(\.candle)
+    }
+
+    func verifySupporterCandidate(
+        symbol: String,
+        date: String,
+        alpacaKey: String,
+        alpacaSecret: String
+    ) async throws -> SupporterVerificationResult {
+        guard !alpacaKey.isEmpty, !alpacaSecret.isEmpty else {
+            throw AnalysisError.missingCredential("후보 검증을 위해 설정에서 Alpaca API Key와 Secret Key를 저장해주세요.")
+        }
+        guard DateFormatter.isoDate.date(from: date) != nil else {
+            throw AnalysisError.invalidInput("후보 거래일은 2026-05-27 형식으로 입력해주세요.")
+        }
+        let start = addDays(date, -7)
+        let end = addDays(date, 1)
+        let bars = try await alpacaSingleSymbolBars(
+            key: alpacaKey,
+            secret: alpacaSecret,
+            symbol: symbol,
+            start: "\(start)T00:00:00Z",
+            end: "\(end)T23:59:59Z",
+            feed: .iex
+        )
+        let eventBars = bars.filter { easternDate($0.timestamp) == date }
+        guard !eventBars.isEmpty else {
+            throw AnalysisError.remote("\(symbol) \(date) IEX 분봉이 없습니다. 거래일 또는 데이터 권한을 확인해주세요.")
+        }
+        let previousBars = bars.filter { easternDate($0.timestamp) < date }
+        let baseline = previousBars.last?.close ?? eventBars.first?.open ?? eventBars.first!.close
+        let peak = eventBars.map(\.high).max() ?? baseline
+        guard baseline > 0 else {
+            throw AnalysisError.remote("\(symbol)의 기준 가격을 계산하지 못했습니다.")
+        }
+        let change = ((peak - baseline) / baseline) * 100
+        let qualifies = change >= 300
+        let baselineLabel = previousBars.isEmpty ? "해당일 첫 분봉 시가" : "직전 수신 거래일 종가"
+        return SupporterVerificationResult(
+            baselinePrice: baseline,
+            peakPrice: peak,
+            changePercent: change,
+            qualifies: qualifies,
+            note: "IEX 분봉 기준 · \(baselineLabel) 대비 장중 고가 · \(qualifies ? "300% 사건 표본" : "대조 표본")"
+        )
+    }
+
     func investigateLiveCapture(
         alert: LiveAlert,
         alpacaKey: String,
@@ -343,6 +408,32 @@ actor MarketService {
         return output
     }
 
+    private func alpacaSingleSymbolBars(
+        key: String,
+        secret: String,
+        symbol: String,
+        start: String,
+        end: String,
+        feed: LiveDataFeed
+    ) async throws -> [AlpacaMinuteBar] {
+        var components = URLComponents(string: "https://data.alpaca.markets/v2/stocks/\(symbol)/bars")!
+        components.queryItems = [
+            URLQueryItem(name: "timeframe", value: "1Min"),
+            URLQueryItem(name: "start", value: start),
+            URLQueryItem(name: "end", value: end),
+            URLQueryItem(name: "limit", value: "10000"),
+            URLQueryItem(name: "adjustment", value: "split"),
+            URLQueryItem(name: "feed", value: feed.rawValue),
+            URLQueryItem(name: "sort", value: "asc")
+        ]
+        let response: AlpacaSingleBarsResponse = try await json(
+            url: components.url!,
+            headers: ["APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret],
+            name: "Alpaca 차트 분봉"
+        )
+        return response.bars
+    }
+
     private func alpacaNews(key: String, secret: String, symbols: [String], date: String) async throws -> [String: [NewsEvidence]] {
         guard !symbols.isEmpty else { return [:] }
         var components = URLComponents(string: "https://data.alpaca.markets/v1beta1/news")!
@@ -524,7 +615,7 @@ actor MarketService {
 
     private func secHeaders(email: String) -> [String: String] {
         [
-            "User-Agent": "CRT/0.9 taki5cm \(email)",
+            "User-Agent": "CRT/0.10 taki5cm \(email)",
             "Accept-Encoding": "gzip, deflate"
         ]
     }
@@ -611,6 +702,7 @@ private struct MinuteCandidate {
 
 private struct MinuteBar {
     let timestamp: Date
+    let open: Double
     let low: Double
     let high: Double
     let close: Double
@@ -659,6 +751,7 @@ private struct MassiveDailyBar: Decodable {
 
 private struct MassiveMinuteBar: Decodable {
     let timestamp: Double
+    let open: Double
     let high: Double
     let low: Double
     let close: Double
@@ -666,12 +759,13 @@ private struct MassiveMinuteBar: Decodable {
     let vwap: Double?
 
     enum CodingKeys: String, CodingKey {
-        case timestamp = "t", high = "h", low = "l", close = "c", volume = "v", vwap = "vw"
+        case timestamp = "t", open = "o", high = "h", low = "l", close = "c", volume = "v", vwap = "vw"
     }
 
     var minuteBar: MinuteBar {
         MinuteBar(
             timestamp: Date(timeIntervalSince1970: timestamp / 1000),
+            open: open,
             low: low,
             high: high,
             close: close,
@@ -693,6 +787,7 @@ private struct AlpacaBarsResponse: Decodable {
 
 private struct AlpacaMinuteBar: Decodable {
     let timestamp: Date
+    let open: Double
     let high: Double
     let low: Double
     let close: Double
@@ -700,12 +795,20 @@ private struct AlpacaMinuteBar: Decodable {
     let vwap: Double?
 
     enum CodingKeys: String, CodingKey {
-        case timestamp = "t", high = "h", low = "l", close = "c", volume = "v", vwap = "vw"
+        case timestamp = "t", open = "o", high = "h", low = "l", close = "c", volume = "v", vwap = "vw"
     }
 
     var minuteBar: MinuteBar {
-        MinuteBar(timestamp: timestamp, low: low, high: high, close: close, volume: volume, vwap: vwap)
+        MinuteBar(timestamp: timestamp, open: open, low: low, high: high, close: close, volume: volume, vwap: vwap)
     }
+
+    var candle: PriceCandle {
+        PriceCandle(startedAt: timestamp, open: open, high: high, low: low, close: close, volume: volume)
+    }
+}
+
+private struct AlpacaSingleBarsResponse: Decodable {
+    let bars: [AlpacaMinuteBar]
 }
 
 private struct AlpacaNewsResponse: Decodable {

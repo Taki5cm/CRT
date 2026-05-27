@@ -3,6 +3,7 @@ import Foundation
 final class LiveQuoteService {
     private var task: URLSessionWebSocketTask?
     private var requestedSymbols: [String] = []
+    private var detectionSymbols: Set<String> = []
     private var allSymbols = false
     private var feed: LiveDataFeed = .iex
     private var rules = LiveScanRules()
@@ -21,6 +22,7 @@ final class LiveQuoteService {
     private var onMovers: (([LiveMovement]) -> Void)?
     private var onStatus: ((String, Bool) -> Void)?
     private var outcomeTrackingSymbols: [String: Date] = [:]
+    private var chartSymbol = ""
     private let detector = LiveRapidMoveDetector()
     private let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -35,6 +37,7 @@ final class LiveQuoteService {
         symbols: [String],
         allSymbols: Bool,
         outcomeSymbols: [String],
+        chartSymbol: String,
         rules: LiveScanRules,
         onTrade: @escaping (LiveTrade) -> Void,
         onAlert: @escaping (LiveAlert) -> Void,
@@ -46,7 +49,12 @@ final class LiveQuoteService {
         disconnect()
         self.key = key
         self.secret = secret
-        requestedSymbols = allSymbols ? ["*"] : symbols
+        let normalizedChartSymbol = chartSymbol.uppercased()
+        detectionSymbols = Set(symbols)
+        let chartAllowance = detectionSymbols.contains(normalizedChartSymbol) || detectionSymbols.count < 30
+            ? [normalizedChartSymbol]
+            : []
+        requestedSymbols = allSymbols ? ["*"] : Array(Set(symbols + chartAllowance)).sorted()
         self.allSymbols = allSymbols
         self.feed = feed
         self.rules = rules
@@ -56,6 +64,7 @@ final class LiveQuoteService {
         self.onActivity = onActivity
         self.onMovers = onMovers
         self.onStatus = onStatus
+        self.chartSymbol = normalizedChartSymbol
         detector.reset()
         receivedTradeCount = 0
         lastActivityPublishedAt = .distantPast
@@ -90,6 +99,20 @@ final class LiveQuoteService {
 
     func updateRules(_ rules: LiveScanRules) {
         self.rules = rules
+    }
+
+    func updateChartSymbol(_ symbol: String) {
+        let next = symbol.uppercased()
+        guard next != chartSymbol else { return }
+        let previous = chartSymbol
+        chartSymbol = next
+        guard shouldStayConnected, !allSymbols else { return }
+        if !previous.isEmpty, !detectionSymbols.contains(previous) {
+            send(["action": "unsubscribe", "trades": [previous]])
+        }
+        if !detectionSymbols.contains(next), detectionSymbols.count < 30 {
+            send(["action": "subscribe", "trades": [next]])
+        }
     }
 
     private func subscribe() {
@@ -154,7 +177,7 @@ final class LiveQuoteService {
                     lastActivityPublishedAt = receivedAt
                     onActivity?(receivedTradeCount, receivedAt)
                 }
-                if !allSymbols {
+                if !allSymbols || trade.symbol == chartSymbol {
                     onTrade?(trade)
                 }
                 if let trackingUntil = outcomeTrackingSymbols[trade.symbol] {
@@ -164,6 +187,7 @@ final class LiveQuoteService {
                         outcomeTrackingSymbols.removeValue(forKey: trade.symbol)
                     }
                 }
+                guard allSymbols || detectionSymbols.contains(trade.symbol) else { continue }
                 let update = detector.process(trade: trade, rules: rules, feed: feed)
                 if let movement = update.movement {
                     latestMovements[movement.symbol] = movement

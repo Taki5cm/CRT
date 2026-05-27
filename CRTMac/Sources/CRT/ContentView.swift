@@ -6,11 +6,24 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.035, green: 0.067, blue: 0.071).ignoresSafeArea()
+            LinearGradient(
+                colors: [Color(red: 0.018, green: 0.035, blue: 0.050), Color(red: 0.030, green: 0.063, blue: 0.071)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            RadialGradient(
+                colors: [Color.cyan.opacity(0.12), .clear],
+                center: .topTrailing,
+                startRadius: 20,
+                endRadius: 470
+            )
+            .ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     header
                     liveQuotes
+                    captureHistory
                     supporterAI
                     historicalAnalysis
                 }
@@ -22,7 +35,7 @@ struct ContentView: View {
         .sheet(isPresented: $model.isShowingSettings) {
             SettingsView()
                 .environmentObject(model)
-                .frame(width: 580, height: 515)
+                .frame(width: 600, height: 585)
         }
         .sheet(isPresented: $model.isShowingDatePicker) {
             TradingDatePickerView()
@@ -46,7 +59,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.6")
+                Text("0.9")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -54,11 +67,17 @@ struct ContentView: View {
                     .padding(.vertical, 6)
                     .overlay(Capsule().stroke(.secondary.opacity(0.5)))
             }
-            Text("시장을 계속 감시하고\n급등락 순간을 포착합니다")
+            Text("급등락을 포착하고\n근거를 즉시 교차 확인합니다")
                 .font(.system(size: 38, weight: .bold, design: .rounded))
                 .tracking(-1.5)
-            Text("감시 시작 후 중지할 때까지 체결 흐름을 확인합니다. 감지 결과는 매수 추천이나 자동매매 신호가 아닙니다.")
+            Text("가격 경보 뒤 Alpaca 뉴스, SEC 제출 이력, 기업 규모와 외부 리서치 링크를 연결하고 이후 성적을 이 Mac에 저장합니다. 조사 결과는 매수 추천이나 자동매매 신호가 아닙니다.")
                 .foregroundStyle(.secondary)
+            HStack(spacing: 10) {
+                SignalChip(title: "LIVE", detail: model.isLiveRunning ? "CONNECTED" : "STANDBY", color: model.isLiveRunning ? .green : .secondary)
+                SignalChip(title: "FEED", detail: model.liveMonitoringMode.feed.rawValue.uppercased(), color: .cyan)
+                SignalChip(title: "EVIDENCE", detail: "NEWS + SEC", color: Color(red: 0.79, green: 0.97, blue: 0.38))
+                SignalChip(title: "LOCAL DB", detail: "v\(CaptureHistoryStore.schemaVersion)", color: .purple)
+            }
         }
     }
 
@@ -302,15 +321,22 @@ struct ContentView: View {
                     }
                     LabeledContent("재알림 제한") {
                         Picker("", selection: $model.liveRules.cooldownSeconds) {
+                            Text("제한 없음").tag(0)
+                            Text("10초").tag(10)
+                            Text("30초").tag(30)
                             Text("1분").tag(60)
+                            Text("2분").tag(120)
                             Text("5분").tag(300)
                             Text("15분").tag(900)
+                            Text("30분").tag(1800)
                         }
                         .labelsHidden()
-                        .frame(width: 72)
+                        .frame(width: 104)
                     }
                 }
-                .disabled(model.isLiveRunning)
+                Text("감시 중에도 조건과 재알림 제한을 바꾸면 다음 수신 체결부터 바로 적용됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.cyan.opacity(0.85))
                 HStack {
                     Text("포착은 감시 시작 후 수신된 체결 사이의 움직임을 계산합니다. 이미 오른 구간은 포착 대상이 아닙니다.")
                         .font(.caption)
@@ -414,18 +440,19 @@ struct ContentView: View {
                 HStack {
                     Text("위험·기대 분석 서포터")
                         .font(.title3.bold())
-                    Text("준비 중")
+                    Text("기록 수집 중")
                         .font(.caption.bold())
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Capsule().fill(.orange.opacity(0.13)))
+                        .background(Capsule().fill(Color(red: 0.79, green: 0.97, blue: 0.38).opacity(0.13)))
                     Spacer()
                 }
-                Text("급등락 포착 뒤의 추가 상승, 급락, 되돌림을 과거 사례로 비교하는 보조 기능을 다음 단계에서 연결합니다.")
+                Text("0.7부터 실제 포착 뒤의 추가 상승, 급락, 되돌림 결과를 저장합니다. 충분한 기록이 쌓이면 조건별 과거 사례 비교와 검증을 진행할 수 있습니다.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 12) {
+                    Metric(title: "저장된 표본", value: "\(model.captureRecords.count)건")
                     Metric(title: "학습 대상", value: "포착 후 1·5·15분")
                     Metric(title: "입력 근거", value: "가격·거래대금·뉴스")
                     Metric(title: "현재 표시", value: "예측치 미제공")
@@ -433,6 +460,74 @@ struct ContentView: View {
                 Text("검증되지 않은 확률을 투자 판단처럼 보여주지 않기 위해, 충분한 과거 표본과 성능 검증이 준비되기 전에는 상승 기대률·하락 위험률 숫자를 표시하지 않습니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            .padding(10)
+        }
+    }
+
+    private var captureHistory: some View {
+        GroupBox {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("포착 기록과 2차 조사 보고")
+                            .font(.title3.bold())
+                        Text("실시간 포착 뒤 후속 성적과 뉴스·공시·기업 규모를 Mac 내부에 누적합니다.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("새로고침") { model.refreshCaptureHistory() }
+                        .buttonStyle(.bordered)
+                    Button("CSV 내보내기") { model.exportCaptureHistory() }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(model.captureRecords.isEmpty)
+                }
+
+                HStack(spacing: 12) {
+                    Metric(title: "저장 기록", value: "\(model.captureRecords.count)건")
+                    Metric(
+                        title: "추적 중",
+                        value: "\(model.captureRecords.filter { $0.status == .tracking }.count)건"
+                    )
+                    Metric(
+                        title: "15분 완료",
+                        value: "\(model.captureRecords.filter { $0.status == .completed }.count)건"
+                    )
+                    Metric(
+                        title: "수신 누락",
+                        value: "\(model.captureRecords.filter { $0.status == .incomplete }.count)건"
+                    )
+                    Metric(title: "저장 방식", value: "Mac 로컬 DB v\(CaptureHistoryStore.schemaVersion)")
+                }
+
+                Text(model.captureHistoryStatus)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(model.catalystStatusMessage)
+                    .font(.caption)
+                    .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
+
+                if model.captureRecords.isEmpty {
+                    RoundedRectangle(cornerRadius: 12)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [5]))
+                        .foregroundStyle(.secondary.opacity(0.35))
+                        .frame(height: 86)
+                        .overlay {
+                            Text("시장 감시에서 급등락이 포착되면 이후 결과가 이곳에 쌓입니다.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                } else {
+                    Text("1·5·15분 결과는 해당 시점을 지난 뒤 처음 수신된 체결 가격 기준입니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    ForEach(model.captureRecords.prefix(10)) { record in
+                        CaptureRecordRow(record: record) {
+                            model.retryCatalystResearch(for: record)
+                        }
+                    }
+                }
             }
             .padding(10)
         }
@@ -663,6 +758,214 @@ private struct LiveMovementRow: View {
     }
 }
 
+private struct CaptureRecordRow: View {
+    let record: CaptureRecord
+    let onRetryResearch: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 7) {
+                        Text(record.symbol)
+                            .font(.headline.bold())
+                        Text(record.direction.label)
+                            .font(.caption.bold())
+                            .foregroundStyle(directionColor)
+                    }
+                    Text("\(record.marketSession) · \(DateFormatter.displayEastern.string(from: record.detectedAt)) ET")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 152, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(String(format: "%+.2f%% 포착", record.changePercent))
+                        .font(.callout.monospacedDigit().bold())
+                        .foregroundStyle(directionColor)
+                    Text("$\(record.detectedPrice, specifier: "%.2f") · \(record.feed.rawValue.uppercased())")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 115, alignment: .leading)
+
+                OutcomeMetric(label: "1분", value: record.performance1Minute)
+                OutcomeMetric(label: "5분", value: record.performance5Minutes)
+                OutcomeMetric(label: "15분", value: record.performance15Minutes)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("고점 \(signed(record.maxAdvancePercent))")
+                        .foregroundStyle(.green)
+                    Text("저점 \(signed(record.maxDrawdownPercent))")
+                        .foregroundStyle(.red)
+                }
+                .font(.caption.monospacedDigit())
+                .frame(width: 110, alignment: .leading)
+
+                Spacer()
+                Text(record.status.label)
+                    .font(.caption.bold())
+                    .foregroundStyle(record.status == .tracking ? Color(red: 0.79, green: 0.97, blue: 0.38) : .secondary)
+            }
+            Divider()
+            if let report = record.catalystReport {
+                CatalystReportDetail(symbol: record.symbol, report: report, onRetry: onRetryResearch)
+            } else {
+                HStack {
+                    Text("0.7 이전 기록입니다. 뉴스·공시·기업 규모 2차 보고가 아직 없습니다.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("2차 조사 실행", action: onRetryResearch)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+        }
+        .padding(11)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.035)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(.white.opacity(0.08)))
+    }
+
+    private var directionColor: Color {
+        record.direction == .rising ? .green : .red
+    }
+
+    private func signed(_ value: Double) -> String {
+        String(format: "%+.2f%%", value)
+    }
+}
+
+private struct CatalystReportDetail: View {
+    let symbol: String
+    let report: CatalystResearchReport
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Text(report.status.label)
+                    .font(.caption.bold())
+                    .foregroundStyle(report.hasDilutionRisk ? .orange : .secondary)
+                if report.hasDilutionRisk {
+                    Text("희석 가능성 확인 필요: \(report.dilutionForms.joined(separator: ", "))")
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                }
+                Spacer()
+                if report.status == .failed || report.status == .partial {
+                    Button("다시 조사", action: onRetry)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+            Text(report.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if report.status != .checking {
+                HStack(spacing: 9) {
+                    ResearchValue(title: "시가총액", value: compactDollars(report.marketCap))
+                    ResearchValue(title: "발행주식 수", value: compactShares(report.shareClassSharesOutstanding))
+                    ResearchValue(title: "가중 발행주식", value: compactShares(report.weightedSharesOutstanding))
+                    ResearchValue(title: "최근 뉴스", value: "\(report.news.count)건")
+                    ResearchValue(title: "최근 SEC", value: "\(report.filings.count)건")
+                }
+            }
+
+            ForEach(report.news.prefix(2)) { news in
+                if let url = news.url {
+                    Link(destination: url) {
+                        Label(news.headline, systemImage: "newspaper")
+                    }
+                    .font(.caption)
+                } else {
+                    Label(news.headline, systemImage: "newspaper")
+                        .font(.caption)
+                }
+            }
+            ForEach(report.filings.filter(\.isDilutionRelated).prefix(3)) { filing in
+                if let url = filing.url {
+                    Link(destination: url) {
+                        Label("SEC \(filing.form) · \(filing.date) · 희석 가능성 관련", systemImage: "exclamationmark.doc")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                }
+            }
+            ForEach(report.warnings.prefix(2), id: \.self) { warning in
+                Text(warning)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+            HStack(spacing: 12) {
+                Link(destination: stockTitanURL) {
+                    Label("Stock Titan 뉴스 확인", systemImage: "bolt.horizontal.circle")
+                }
+                Link(destination: googleNewsURL) {
+                    Label("Google News 교차 검색", systemImage: "magnifyingglass")
+                }
+            }
+            .font(.caption.bold())
+        }
+    }
+
+    private var stockTitanURL: URL {
+        URL(string: "https://www.stocktitan.net/news/\(symbol)")!
+    }
+
+    private var googleNewsURL: URL {
+        var components = URLComponents(string: "https://news.google.com/search")!
+        components.queryItems = [URLQueryItem(name: "q", value: "\(symbol) stock")]
+        return components.url!
+    }
+
+    private func compactDollars(_ value: Double?) -> String {
+        value.map { "$\($0.formatted(.number.notation(.compactName).precision(.fractionLength(1))))" } ?? "자료 없음"
+    }
+
+    private func compactShares(_ value: Double?) -> String {
+        value.map { $0.formatted(.number.notation(.compactName).precision(.fractionLength(1))) } ?? "자료 없음"
+    }
+}
+
+private struct ResearchValue: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value).font(.caption.bold())
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 7).fill(.white.opacity(0.035)))
+    }
+}
+
+private struct OutcomeMetric: View {
+    let label: String
+    let value: Double?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if let value {
+                Text(String(format: "%+.2f%%", value))
+                    .foregroundStyle(value >= 0 ? .green : .red)
+            } else {
+                Text("계산 중")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption.monospacedDigit())
+        .frame(width: 62, alignment: .leading)
+    }
+}
+
 private struct ReportCard: View {
     let report: AnalysisReport
 
@@ -706,6 +1009,15 @@ private struct ReportCard: View {
                         Label(item.headline, systemImage: "newspaper")
                     }
                 }
+                HStack(spacing: 14) {
+                    Link(destination: stockTitanURL) {
+                        Label("Stock Titan 최신 뉴스", systemImage: "bolt.horizontal.circle")
+                    }
+                    Link(destination: googleNewsURL) {
+                        Label("Google News 검색", systemImage: "magnifyingglass")
+                    }
+                }
+                .font(.caption.bold())
             }
             .font(.callout)
             Spacer()
@@ -721,6 +1033,16 @@ private struct ReportCard: View {
         case .newsFound: return Color(red: 0.79, green: 0.97, blue: 0.38)
         case .unexplained: return .orange
         }
+    }
+
+    private var stockTitanURL: URL {
+        URL(string: "https://www.stocktitan.net/news/\(report.symbol)")!
+    }
+
+    private var googleNewsURL: URL {
+        var components = URLComponents(string: "https://news.google.com/search")!
+        components.queryItems = [URLQueryItem(name: "q", value: "\(report.symbol) stock \(DateFormatter.easternDate.string(from: report.detectedAt))")]
+        return components.url!
     }
 }
 
@@ -742,6 +1064,9 @@ struct SettingsView: View {
                 SecureField("Alpaca API Key", text: $model.alpacaKey)
                 SecureField("Alpaca Secret Key", text: $model.alpacaSecret)
                 TextField("SEC 조회용 이메일", text: $model.secEmail)
+                Text("SEC 제출 이력은 Massive 종목 정보의 CIK를 우선 사용해 연결합니다. 이메일은 SEC 요청 식별 규칙을 지키기 위해 사용됩니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .textFieldStyle(.roundedBorder)
             Divider()
@@ -749,6 +1074,22 @@ struct SettingsView: View {
                 get: { model.notificationsEnabled },
                 set: { model.setNotificationsEnabled($0) }
             ))
+            HStack {
+                Text("재알림 제한")
+                Spacer()
+                Picker("", selection: $model.liveRules.cooldownSeconds) {
+                    Text("없음").tag(0)
+                    Text("10초").tag(10)
+                    Text("30초").tag(30)
+                    Text("1분").tag(60)
+                    Text("2분").tag(120)
+                    Text("5분").tag(300)
+                    Text("15분").tag(900)
+                    Text("30분").tag(1800)
+                }
+                .labelsHidden()
+                .frame(width: 120)
+            }
             HStack {
                 Text(model.notificationStatus)
                     .font(.caption)
@@ -771,6 +1112,30 @@ struct SettingsView: View {
         }
         .padding(26)
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct SignalChip: View {
+    let title: String
+    let detail: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(color)
+                .frame(width: 6, height: 6)
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Text(detail)
+                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 11)
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 9).fill(.white.opacity(0.03)))
+        .overlay(RoundedRectangle(cornerRadius: 9).stroke(color.opacity(0.22)))
     }
 }
 

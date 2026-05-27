@@ -13,7 +13,10 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "CRT",
-            path: "Sources/CRT"
+            path: "Sources/CRT",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         )
     ]
 )

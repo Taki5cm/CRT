@@ -1,5 +1,7 @@
 import Foundation
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -24,12 +26,22 @@ final class AppModel: ObservableObject {
             UserDefaults.standard.set(liveMonitoringMode.rawValue, forKey: "liveMonitoringMode")
         }
     }
-    @Published var liveRules = LiveScanRules()
+    @Published var liveRules = LiveScanRules() {
+        didSet {
+            UserDefaults.standard.set(liveRules.cooldownSeconds, forKey: "liveCooldownSeconds")
+            if isLiveRunning {
+                liveQuoteService.updateRules(liveRules)
+            }
+        }
+    }
     @Published var liveAlerts: [LiveAlert] = []
     @Published var liveStartedAt: Date?
     @Published var liveReceivedTradeCount = 0
     @Published var liveLastTradeAt: Date?
     @Published var liveMovers: [LiveMovement] = []
+    @Published var captureRecords: [CaptureRecord] = []
+    @Published var captureHistoryStatus = "포착 기록 저장소를 준비하고 있습니다..."
+    @Published var catalystStatusMessage = "포착 후 뉴스·공시·기업 규모를 자동으로 조사합니다."
 
     @Published var massiveKey = ""
     @Published var alpacaKey = ""
@@ -40,6 +52,8 @@ final class AppModel: ObservableObject {
     private let service = MarketService()
     private let notificationService = NotificationService()
     private let liveQuoteService = LiveQuoteService()
+    private var captureHistoryStore: CaptureHistoryStore?
+    private var lastCaptureRefreshAt = Date.distantPast
 
     init() {
         notificationsEnabled = UserDefaults.standard.bool(forKey: "notificationsEnabled")
@@ -51,6 +65,10 @@ final class AppModel: ObservableObject {
         alpacaKey = keychain.value(for: "alpacaKey")
         alpacaSecret = keychain.value(for: "alpacaSecret")
         secEmail = keychain.value(for: "secEmail")
+        if UserDefaults.standard.object(forKey: "liveCooldownSeconds") != nil {
+            liveRules.cooldownSeconds = UserDefaults.standard.integer(forKey: "liveCooldownSeconds")
+        }
+        prepareCaptureHistory()
         Task { await refreshNotificationStatus() }
     }
 
@@ -156,6 +174,8 @@ final class AppModel: ObservableObject {
         beginAnalysis(message: "전체시장 후보를 확인하고 있습니다...") { [self] in
             try await service.scanWholeMarket(
                 massiveKey: massiveKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                alpacaKey: alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                alpacaSecret: alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines),
                 secEmail: secEmail.trimmingCharacters(in: .whitespacesAndNewlines),
                 date: selectedDateString,
                 rules: rules
@@ -168,6 +188,7 @@ final class AppModel: ObservableObject {
             try await service.analyzeWatchlist(
                 alpacaKey: alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines),
                 alpacaSecret: alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines),
+                massiveKey: massiveKey.trimmingCharacters(in: .whitespacesAndNewlines),
                 secEmail: secEmail.trimmingCharacters(in: .whitespacesAndNewlines),
                 date: selectedDateString,
                 symbols: watchlist,
@@ -189,6 +210,7 @@ final class AppModel: ObservableObject {
                 return
             }
         }
+        refreshCaptureHistory()
         errorMessage = nil
         liveTrades = []
         liveAlerts = []
@@ -204,6 +226,7 @@ final class AppModel: ObservableObject {
             feed: liveMonitoringMode.feed,
             symbols: watchlist,
             allSymbols: liveMonitoringMode.scansAllSymbols,
+            outcomeSymbols: Array(Set(captureRecords.filter { $0.status == .tracking }.map(\.symbol))),
             rules: liveRules
         ) { [weak self] trade in
             Task { @MainActor in
@@ -217,10 +240,16 @@ final class AppModel: ObservableObject {
                 guard let self else { return }
                 self.liveAlerts.insert(alert, at: 0)
                 self.liveAlerts = Array(self.liveAlerts.prefix(100))
+                self.saveCapture(alert)
                 self.liveStatusMessage = "\(alert.symbol) \(alert.direction.label) 후보를 감지했습니다. 뉴스·공시 확인 전 가격 경보입니다."
+                self.beginCatalystResearch(for: alert)
                 if self.notificationsEnabled {
                     await self.notificationService.sendLiveAlertNotification(alert)
                 }
+            }
+        } onTrackedTrade: { [weak self] trade in
+            Task { @MainActor in
+                self?.trackCapturePerformance(with: trade)
             }
         } onActivity: { [weak self] count, latestAt in
             Task { @MainActor in
@@ -244,10 +273,66 @@ final class AppModel: ObservableObject {
         isLiveRunning = false
         liveStartedAt = nil
         liveStatusMessage = "시장 감시를 중지했습니다."
+        refreshCaptureHistory()
     }
 
     func clearLiveAlerts() {
         liveAlerts = []
+    }
+
+    func refreshCaptureHistory() {
+        guard let captureHistoryStore else { return }
+        do {
+            try captureHistoryStore.expireStaleRecords()
+            captureRecords = try captureHistoryStore.fetchRecords()
+            captureHistoryStatus = captureRecords.isEmpty
+                ? "포착되는 급등락부터 이 Mac에 저장됩니다."
+                : "최근 포착 기록 \(captureRecords.count)건을 불러왔습니다. 데이터베이스 v\(CaptureHistoryStore.schemaVersion)"
+        } catch {
+            captureHistoryStatus = error.localizedDescription
+        }
+    }
+
+    func exportCaptureHistory() {
+        guard let captureHistoryStore else {
+            errorMessage = "포착 기록 저장소가 아직 준비되지 않았습니다."
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "CRT-Capture-History.csv"
+        panel.title = "포착 기록 CSV 내보내기"
+        panel.message = "저장할 위치를 선택하세요. API 키는 포함되지 않습니다."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try captureHistoryStore.exportCSV(to: url)
+            captureHistoryStatus = "포착 기록을 CSV로 저장했습니다: \(url.lastPathComponent)"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func retryCatalystResearch(for record: CaptureRecord) {
+        if let captureHistoryStore {
+            do {
+                try captureHistoryStore.saveCatalystReport(.checking(), captureID: record.id)
+                refreshCaptureHistory()
+            } catch {
+                catalystStatusMessage = error.localizedDescription
+            }
+        }
+        let alert = LiveAlert(
+            symbol: record.symbol,
+            detectedAt: record.detectedAt,
+            baselinePrice: record.baselinePrice,
+            latestPrice: record.detectedPrice,
+            changePercent: record.changePercent,
+            direction: record.direction,
+            dollarVolume: record.dollarVolume,
+            windowSeconds: record.windowSeconds,
+            feed: record.feed
+        )
+        runCatalystResearch(for: alert, captureID: record.id)
     }
 
     func applyReceptionTestRules() {
@@ -282,6 +367,73 @@ final class AppModel: ObservableObject {
                 errorMessage = error.localizedDescription
                 statusMessage = "분석을 완료하지 못했습니다."
             }
+        }
+    }
+
+    private func prepareCaptureHistory() {
+        do {
+            captureHistoryStore = try CaptureHistoryStore()
+            refreshCaptureHistory()
+        } catch {
+            captureHistoryStatus = error.localizedDescription
+        }
+    }
+
+    private func saveCapture(_ alert: LiveAlert) {
+        guard let captureHistoryStore else { return }
+        do {
+            try captureHistoryStore.record(alert: alert, monitoringMode: liveMonitoringMode)
+            refreshCaptureHistory()
+        } catch {
+            captureHistoryStatus = error.localizedDescription
+        }
+    }
+
+    private func beginCatalystResearch(for alert: LiveAlert) {
+        guard let captureHistoryStore else { return }
+        do {
+            try captureHistoryStore.saveCatalystReport(.checking(), captureID: alert.id.uuidString)
+            refreshCaptureHistory()
+        } catch {
+            catalystStatusMessage = error.localizedDescription
+        }
+        runCatalystResearch(for: alert, captureID: alert.id.uuidString)
+    }
+
+    private func runCatalystResearch(for alert: LiveAlert, captureID: String) {
+        catalystStatusMessage = "\(alert.symbol) 2차 조사를 진행하고 있습니다..."
+        Task {
+            let report = await service.investigateLiveCapture(
+                alert: alert,
+                alpacaKey: alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                alpacaSecret: alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines),
+                massiveKey: massiveKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                secEmail: secEmail.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            guard let captureHistoryStore else { return }
+            do {
+                try captureHistoryStore.saveCatalystReport(report, captureID: captureID)
+                refreshCaptureHistory()
+                catalystStatusMessage = "\(alert.symbol) \(report.summary)"
+                if notificationsEnabled {
+                    await notificationService.sendCatalystReportNotification(symbol: alert.symbol, report: report)
+                }
+            } catch {
+                catalystStatusMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func trackCapturePerformance(with trade: LiveTrade) {
+        guard let captureHistoryStore else { return }
+        do {
+            guard try captureHistoryStore.updatePerformance(for: trade) else { return }
+            if trade.receivedAt.timeIntervalSince(lastCaptureRefreshAt) >= 1 {
+                lastCaptureRefreshAt = trade.receivedAt
+                refreshCaptureHistory()
+            }
+        } catch {
+            captureHistoryStatus = error.localizedDescription
         }
     }
 

@@ -16,9 +16,11 @@ final class LiveQuoteService {
     private var lastMoversPublishedAt = Date.distantPast
     private var onTrade: ((LiveTrade) -> Void)?
     private var onAlert: ((LiveAlert) -> Void)?
+    private var onTrackedTrade: ((LiveTrade) -> Void)?
     private var onActivity: ((Int, Date) -> Void)?
     private var onMovers: (([LiveMovement]) -> Void)?
     private var onStatus: ((String, Bool) -> Void)?
+    private var outcomeTrackingSymbols: [String: Date] = [:]
     private let detector = LiveRapidMoveDetector()
     private let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -32,9 +34,11 @@ final class LiveQuoteService {
         feed: LiveDataFeed,
         symbols: [String],
         allSymbols: Bool,
+        outcomeSymbols: [String],
         rules: LiveScanRules,
         onTrade: @escaping (LiveTrade) -> Void,
         onAlert: @escaping (LiveAlert) -> Void,
+        onTrackedTrade: @escaping (LiveTrade) -> Void,
         onActivity: @escaping (Int, Date) -> Void,
         onMovers: @escaping ([LiveMovement]) -> Void,
         onStatus: @escaping (String, Bool) -> Void
@@ -48,6 +52,7 @@ final class LiveQuoteService {
         self.rules = rules
         self.onTrade = onTrade
         self.onAlert = onAlert
+        self.onTrackedTrade = onTrackedTrade
         self.onActivity = onActivity
         self.onMovers = onMovers
         self.onStatus = onStatus
@@ -56,6 +61,9 @@ final class LiveQuoteService {
         lastActivityPublishedAt = .distantPast
         latestMovements = [:]
         lastMoversPublishedAt = .distantPast
+        outcomeTrackingSymbols = Dictionary(uniqueKeysWithValues: outcomeSymbols.map {
+            ($0, Date().addingTimeInterval(24 * 60 * 60))
+        })
         shouldStayConnected = true
         openConnection()
     }
@@ -78,6 +86,10 @@ final class LiveQuoteService {
         reconnectWorkItem = nil
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+    }
+
+    func updateRules(_ rules: LiveScanRules) {
+        self.rules = rules
     }
 
     private func subscribe() {
@@ -145,6 +157,13 @@ final class LiveQuoteService {
                 if !allSymbols {
                     onTrade?(trade)
                 }
+                if let trackingUntil = outcomeTrackingSymbols[trade.symbol] {
+                    if trade.occurredAt <= trackingUntil {
+                        onTrackedTrade?(trade)
+                    } else {
+                        outcomeTrackingSymbols.removeValue(forKey: trade.symbol)
+                    }
+                }
                 let update = detector.process(trade: trade, rules: rules, feed: feed)
                 if let movement = update.movement {
                     latestMovements[movement.symbol] = movement
@@ -153,6 +172,7 @@ final class LiveQuoteService {
                     }
                 }
                 if let alert = update.alert {
+                    outcomeTrackingSymbols[alert.symbol] = alert.detectedAt.addingTimeInterval(24 * 60 * 60)
                     onAlert?(alert)
                 }
             case "error":

@@ -11,6 +11,8 @@ actor MarketService {
 
     func scanWholeMarket(
         massiveKey: String,
+        alpacaKey: String,
+        alpacaSecret: String,
         secEmail: String,
         date: String,
         rules: ScanRules
@@ -37,20 +39,42 @@ actor MarketService {
             )
         }
         let candidates = detectMinuteCandidates(barsBySymbol: minuteBars, date: date, rules: rules)
+        let candidateSymbols = Array(Set(candidates.map(\.symbol)))
         var warnings: [String] = []
+        let news: [String: [NewsEvidence]]
+        if alpacaKey.isEmpty || alpacaSecret.isEmpty {
+            news = [:]
+            if !candidateSymbols.isEmpty {
+                warnings.append("Alpaca API Key를 설정하면 전체시장 후보에도 시점 주변 뉴스를 자동 연결합니다.")
+            }
+        } else {
+            do {
+                news = try await alpacaNews(
+                    key: alpacaKey,
+                    secret: alpacaSecret,
+                    symbols: candidateSymbols,
+                    date: date
+                )
+            } catch {
+                warnings.append("후보 뉴스를 불러오지 못했습니다: \(error.localizedDescription)")
+                news = [:]
+            }
+        }
+        let knownCIKs = await massiveCIKByTicker(apiKey: massiveKey, symbols: candidateSymbols)
         let filings: [String: [FilingEvidence]]
         do {
             filings = try await fetchFilings(
-                symbols: Array(Set(candidates.map(\.symbol))),
+                symbols: candidateSymbols,
                 date: date,
-                email: secEmail
+                email: secEmail,
+                knownCIKs: knownCIKs
             )
         } catch {
             warnings.append("SEC 공시를 불러오지 못했습니다: \(error.localizedDescription)")
             filings = [:]
         }
         let reports = candidates.map {
-            report(candidate: $0, filings: filings[$0.symbol] ?? [], news: [])
+            report(candidate: $0, filings: filings[$0.symbol] ?? [], news: nearbyNews(news[$0.symbol] ?? [], candidate: $0))
         }
         return AnalysisResult(
             mode: .wholeMarket,
@@ -60,13 +84,14 @@ actor MarketService {
             minuteBarsChecked: minuteBars.values.reduce(0) { $0 + $1.count },
             shortlistedSymbols: shortlist.count,
             warnings: warnings,
-            methodology: "전체시장 일봉으로 후보를 좁힌 뒤 상위 \(detailLimit)개만 1분봉으로 재검사합니다. 무료 호출 한도에 맞춘 방식이라 모든 장중 급등을 복원하지는 않습니다."
+            methodology: "전체시장 일봉으로 후보를 좁힌 뒤 상위 \(detailLimit)개를 1분봉으로 재검사하고, Alpaca 뉴스와 SEC 제출 이력을 연결합니다. 무료 호출 한도에 맞춘 방식이라 모든 장중 급등을 복원하지는 않습니다."
         )
     }
 
     func analyzeWatchlist(
         alpacaKey: String,
         alpacaSecret: String,
+        massiveKey: String,
         secEmail: String,
         date: String,
         symbols: [String],
@@ -101,7 +126,8 @@ actor MarketService {
         }
         let filings: [String: [FilingEvidence]]
         do {
-            filings = try await fetchFilings(symbols: candidateSymbols, date: date, email: secEmail)
+            let knownCIKs = massiveKey.isEmpty ? [:] : await massiveCIKByTicker(apiKey: massiveKey, symbols: candidateSymbols)
+            filings = try await fetchFilings(symbols: candidateSymbols, date: date, email: secEmail, knownCIKs: knownCIKs)
         } catch {
             warnings.append("SEC 공시를 불러오지 못했습니다: \(error.localizedDescription)")
             filings = [:]
@@ -118,6 +144,90 @@ actor MarketService {
             shortlistedSymbols: nil,
             warnings: warnings,
             methodology: "무료 계정에서 이용 가능한 IEX 과거 1분봉으로 입력 종목의 변동을 검사하고, 급변 시점 주변 뉴스와 당일 SEC 공시를 연결합니다. IEX는 미국 전체 거래소 자료가 아니며 체결 가능성을 의미하지 않습니다."
+        )
+    }
+
+    func investigateLiveCapture(
+        alert: LiveAlert,
+        alpacaKey: String,
+        alpacaSecret: String,
+        massiveKey: String,
+        secEmail: String
+    ) async -> CatalystResearchReport {
+        var warnings: [String] = []
+        var news: [CatalystNewsItem] = []
+        var filings: [CatalystFilingItem] = []
+        var profile: MassiveTickerDetails?
+
+        do {
+            news = try await alpacaNewsForCapture(
+                key: alpacaKey,
+                secret: alpacaSecret,
+                symbol: alert.symbol,
+                detectedAt: alert.detectedAt
+            )
+        } catch {
+            warnings.append("뉴스 확인 실패: \(error.localizedDescription)")
+        }
+
+        if massiveKey.isEmpty {
+            warnings.append("시가총액·발행주식 수는 설정에 Massive API Key를 저장하면 확인합니다.")
+        } else {
+            do {
+                profile = try await massiveTickerDetails(apiKey: massiveKey, symbol: alert.symbol)
+            } catch {
+                warnings.append("기업 규모 확인 실패: \(error.localizedDescription)")
+            }
+        }
+
+        if secEmail.contains("@") {
+            do {
+                filings = try await recentFilingsForCapture(
+                    symbol: alert.symbol,
+                    detectedAt: alert.detectedAt,
+                    email: secEmail,
+                    knownCIK: profile?.cik.flatMap(normalizedCIK)
+                )
+            } catch {
+                warnings.append("SEC 공시 확인 실패: \(error.localizedDescription)")
+            }
+        } else {
+            warnings.append("SEC 공시 확인을 위해 설정에 연락 이메일을 입력해주세요.")
+        }
+
+        let dilutionForms = Array(Set(filings.filter(\.isDilutionRelated).map(\.form))).sorted()
+        let status: CatalystResearchStatus
+        if news.isEmpty, filings.isEmpty, profile == nil, !warnings.isEmpty {
+            status = .failed
+        } else if warnings.isEmpty {
+            status = .complete
+        } else {
+            status = .partial
+        }
+        let summary: String
+        if !dilutionForms.isEmpty {
+            summary = "최근 희석 가능성 관련 공시 \(dilutionForms.joined(separator: ", ")) 확인. 원문 검토가 필요합니다."
+        } else if let headline = news.first?.headline {
+            summary = "연결 가능성이 있는 최신 뉴스가 있습니다: \(headline)"
+        } else if !filings.isEmpty {
+            summary = "최근 SEC 공시가 확인되었습니다. 가격 변동 원인인지는 원문 확인이 필요합니다."
+        } else {
+            summary = "조회 범위에서 직접 연결되는 뉴스 또는 희석 관련 공시를 찾지 못했습니다."
+        }
+
+        return CatalystResearchReport(
+            status: status,
+            checkedAt: Date(),
+            summary: summary,
+            marketCap: profile?.marketCap,
+            shareClassSharesOutstanding: profile?.shareClassSharesOutstanding,
+            weightedSharesOutstanding: profile?.weightedSharesOutstanding,
+            companyName: profile?.name,
+            industryDescription: profile?.sicDescription,
+            news: news,
+            filings: filings,
+            dilutionForms: dilutionForms,
+            warnings: warnings
         )
     }
 
@@ -261,18 +371,120 @@ actor MarketService {
         return output
     }
 
-    private func fetchFilings(symbols: [String], date: String, email: String) async throws -> [String: [FilingEvidence]] {
+    private func alpacaNewsForCapture(
+        key: String,
+        secret: String,
+        symbol: String,
+        detectedAt: Date
+    ) async throws -> [CatalystNewsItem] {
+        var components = URLComponents(string: "https://data.alpaca.markets/v1beta1/news")!
+        components.queryItems = [
+            URLQueryItem(name: "symbols", value: symbol),
+            URLQueryItem(name: "start", value: ISO8601DateFormatter.captureQuery.string(from: detectedAt.addingTimeInterval(-86_400))),
+            URLQueryItem(name: "end", value: ISO8601DateFormatter.captureQuery.string(from: Date().addingTimeInterval(60))),
+            URLQueryItem(name: "limit", value: "5"),
+            URLQueryItem(name: "sort", value: "desc")
+        ]
+        let data: AlpacaNewsResponse = try await json(
+            url: components.url!,
+            headers: ["APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret],
+            name: "Alpaca 실시간 후속 뉴스"
+        )
+        return data.news
+            .filter { $0.symbols.contains(symbol) }
+            .prefix(3)
+            .map {
+                CatalystNewsItem(headline: $0.headline, createdAt: $0.createdAt, urlString: $0.url)
+            }
+    }
+
+    private func massiveTickerDetails(apiKey: String, symbol: String) async throws -> MassiveTickerDetails? {
+        var components = URLComponents(string: "https://api.massive.com/v3/reference/tickers/\(symbol)")!
+        components.queryItems = [URLQueryItem(name: "apiKey", value: apiKey)]
+        let data: MassiveTickerDetailsResponse = try await json(
+            url: components.url!,
+            headers: [:],
+            name: "Massive \(symbol) 기업 정보"
+        )
+        return data.results
+    }
+
+    private func massiveCIKByTicker(apiKey: String, symbols: [String]) async -> [String: String] {
+        var output: [String: String] = [:]
+        for symbol in symbols {
+            if let details = try? await massiveTickerDetails(apiKey: apiKey, symbol: symbol),
+               let cik = details.cik.flatMap(normalizedCIK) {
+                output[symbol] = cik
+            }
+        }
+        return output
+    }
+
+    private func recentFilingsForCapture(
+        symbol: String,
+        detectedAt: Date,
+        email: String,
+        knownCIK: String?
+    ) async throws -> [CatalystFilingItem] {
+        let headers = secHeaders(email: email)
+        let cik: String
+        if let knownCIK {
+            cik = knownCIK
+        } else {
+            let cikByTicker = try await secCIKByTicker(symbols: [symbol], headers: headers)
+            guard let found = cikByTicker[symbol] else { return [] }
+            cik = found
+        }
+        let submission: SECSubmission = try await json(
+            url: URL(string: "https://data.sec.gov/submissions/CIK\(cik).json")!,
+            headers: headers,
+            name: "SEC \(symbol) 공시"
+        )
+        let cutoff = detectedAt.addingTimeInterval(-30 * 86_400)
+        var results: [CatalystFilingItem] = []
+        for index in submission.filings.recent.form.indices {
+            guard index < submission.filings.recent.filingDate.count,
+                  index < submission.filings.recent.accessionNumber.count,
+                  index < submission.filings.recent.primaryDocument.count,
+                  let filedAt = DateFormatter.isoDate.date(from: submission.filings.recent.filingDate[index]),
+                  filedAt >= cutoff else { continue }
+            let accession = submission.filings.recent.accessionNumber[index]
+            let document = submission.filings.recent.primaryDocument[index]
+            let form = submission.filings.recent.form[index]
+            guard let url = filingURL(cik: cik, accession: accession, document: document) else { continue }
+            results.append(CatalystFilingItem(
+                form: form,
+                date: submission.filings.recent.filingDate[index],
+                urlString: url.absoluteString,
+                isDilutionRelated: isDilutionRelated(form: form)
+            ))
+        }
+        return Array(results.prefix(6))
+    }
+
+    private func isDilutionRelated(form: String) -> Bool {
+        let value = form.uppercased()
+        let dilutionForms = ["S-1", "S-3", "F-1", "F-3", "424B", "EFFECT", "POS AM", "1-A", "RW"]
+        return dilutionForms.contains { value.hasPrefix($0) }
+    }
+
+    private func fetchFilings(
+        symbols: [String],
+        date: String,
+        email: String,
+        knownCIKs: [String: String] = [:]
+    ) async throws -> [String: [FilingEvidence]] {
         guard !symbols.isEmpty else { return [:] }
         guard email.contains("@") else {
             throw AnalysisError.invalidInput("SEC 조회를 위해 설정에 연락 이메일을 입력해주세요.")
         }
-        let headers = ["User-Agent": "CRT personal-research \(email)"]
-        let tickers: [String: SECTicker] = try await json(
-            url: URL(string: "https://www.sec.gov/files/company_tickers.json")!,
-            headers: headers,
-            name: "SEC 종목 목록"
-        )
-        let cikByTicker = Dictionary(uniqueKeysWithValues: tickers.values.map { ($0.ticker.uppercased(), String(format: "%010d", $0.cik)) })
+        let headers = secHeaders(email: email)
+        var cikByTicker = knownCIKs
+        let missingSymbols = symbols.filter { cikByTicker[$0] == nil }
+        if !missingSymbols.isEmpty {
+            let fallback = try await secCIKByTicker(symbols: missingSymbols, headers: headers)
+            cikByTicker.merge(fallback) { current, _ in current }
+        }
         var output = Dictionary(uniqueKeysWithValues: symbols.map { ($0, [FilingEvidence]()) })
         for symbol in symbols {
             guard let cik = cikByTicker[symbol] else { continue }
@@ -284,7 +496,7 @@ actor MarketService {
             for index in submission.filings.recent.filingDate.indices where submission.filings.recent.filingDate[index] == date {
                 let accession = submission.filings.recent.accessionNumber[index]
                 let document = submission.filings.recent.primaryDocument[index]
-                guard let url = URL(string: "https://www.sec.gov/Archives/edgar/data/\(Int(cik) ?? 0)/\(accession.replacingOccurrences(of: "-", with: ""))/\(document)") else { continue }
+                guard let url = filingURL(cik: cik, accession: accession, document: document) else { continue }
                 output[symbol, default: []].append(FilingEvidence(
                     form: submission.filings.recent.form[index],
                     date: date,
@@ -294,6 +506,37 @@ actor MarketService {
             try? await Task.sleep(for: .milliseconds(125))
         }
         return output
+    }
+
+    private func secCIKByTicker(symbols: [String], headers: [String: String]) async throws -> [String: String] {
+        let tickers: [String: SECTicker] = try await json(
+            url: URL(string: "https://www.sec.gov/files/company_tickers.json")!,
+            headers: headers,
+            name: "SEC 종목 목록"
+        )
+        let requested = Set(symbols)
+        return Dictionary(uniqueKeysWithValues: tickers.values.compactMap { ticker in
+            let symbol = ticker.ticker.uppercased()
+            guard requested.contains(symbol) else { return nil }
+            return (symbol, String(format: "%010d", ticker.cik))
+        })
+    }
+
+    private func secHeaders(email: String) -> [String: String] {
+        [
+            "User-Agent": "CRT/0.9 taki5cm \(email)",
+            "Accept-Encoding": "gzip, deflate"
+        ]
+    }
+
+    private func normalizedCIK(_ rawValue: String) -> String? {
+        guard let value = Int(rawValue) else { return nil }
+        return String(format: "%010d", value)
+    }
+
+    private func filingURL(cik: String, accession: String, document: String) -> URL? {
+        guard let numericCIK = Int(cik) else { return nil }
+        return URL(string: "https://www.sec.gov/Archives/edgar/data/\(numericCIK)/\(accession.replacingOccurrences(of: "-", with: ""))/\(document)")
     }
 
     private func json<T: Decodable>(url: URL, headers: [String: String], name: String) async throws -> T {
@@ -377,6 +620,27 @@ private struct MinuteBar {
 
 private struct MassiveResponse<T: Decodable>: Decodable {
     let results: [T]?
+}
+
+private struct MassiveTickerDetailsResponse: Decodable {
+    let results: MassiveTickerDetails?
+}
+
+private struct MassiveTickerDetails: Decodable {
+    let name: String?
+    let cik: String?
+    let marketCap: Double?
+    let shareClassSharesOutstanding: Double?
+    let weightedSharesOutstanding: Double?
+    let sicDescription: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, cik
+        case marketCap = "market_cap"
+        case shareClassSharesOutstanding = "share_class_shares_outstanding"
+        case weightedSharesOutstanding = "weighted_shares_outstanding"
+        case sicDescription = "sic_description"
+    }
 }
 
 private struct MassiveDailyBar: Decodable {
@@ -482,6 +746,14 @@ private struct SECRecentFilings: Decodable {
     let accessionNumber: [String]
     let primaryDocument: [String]
     let form: [String]
+}
+
+private extension ISO8601DateFormatter {
+    static let captureQuery: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 }
 
 private extension JSONDecoder {

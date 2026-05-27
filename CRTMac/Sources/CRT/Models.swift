@@ -155,7 +155,7 @@ enum LiveDirectionFilter: String, CaseIterable, Identifiable {
     }
 }
 
-enum LiveMoveDirection {
+enum LiveMoveDirection: String {
     case rising
     case falling
 
@@ -195,6 +195,129 @@ struct LiveAlert: Identifiable {
     let dollarVolume: Double
     let windowSeconds: Int
     let feed: LiveDataFeed
+}
+
+enum CaptureTrackingStatus: String {
+    case tracking
+    case completed
+    case incomplete
+
+    var label: String {
+        switch self {
+        case .tracking: return "추적 중"
+        case .completed: return "15분 기록 완료"
+        case .incomplete: return "후속 수신 누락"
+        }
+    }
+}
+
+enum CatalystResearchStatus: String, Codable {
+    case checking
+    case complete
+    case partial
+    case failed
+
+    var label: String {
+        switch self {
+        case .checking: return "2차 조사 중"
+        case .complete: return "2차 보고 완료"
+        case .partial: return "일부 자료 확인"
+        case .failed: return "조사 실패"
+        }
+    }
+}
+
+struct CatalystNewsItem: Codable, Identifiable {
+    var id: String { "\(createdAt.timeIntervalSince1970)-\(headline)" }
+    let headline: String
+    let createdAt: Date
+    let urlString: String?
+
+    var url: URL? {
+        urlString.flatMap(URL.init(string:))
+    }
+}
+
+struct CatalystFilingItem: Codable, Identifiable {
+    var id: String { "\(date)-\(form)-\(urlString)" }
+    let form: String
+    let date: String
+    let urlString: String
+    let isDilutionRelated: Bool
+
+    var url: URL? {
+        URL(string: urlString)
+    }
+}
+
+struct CatalystResearchReport: Codable {
+    let status: CatalystResearchStatus
+    let checkedAt: Date
+    let summary: String
+    let marketCap: Double?
+    let shareClassSharesOutstanding: Double?
+    let weightedSharesOutstanding: Double?
+    let companyName: String?
+    let industryDescription: String?
+    let news: [CatalystNewsItem]
+    let filings: [CatalystFilingItem]
+    let dilutionForms: [String]
+    let warnings: [String]
+
+    var hasDilutionRisk: Bool {
+        !dilutionForms.isEmpty
+    }
+
+    static func checking(at date: Date = Date()) -> CatalystResearchReport {
+        CatalystResearchReport(
+            status: .checking,
+            checkedAt: date,
+            summary: "뉴스·SEC 공시·기업 규모를 확인하고 있습니다.",
+            marketCap: nil,
+            shareClassSharesOutstanding: nil,
+            weightedSharesOutstanding: nil,
+            companyName: nil,
+            industryDescription: nil,
+            news: [],
+            filings: [],
+            dilutionForms: [],
+            warnings: []
+        )
+    }
+}
+
+struct CaptureRecord: Identifiable {
+    let id: String
+    let symbol: String
+    let detectedAt: Date
+    let direction: LiveMoveDirection
+    let baselinePrice: Double
+    let detectedPrice: Double
+    let changePercent: Double
+    let dollarVolume: Double
+    let windowSeconds: Int
+    let feed: LiveDataFeed
+    let monitoringMode: LiveMonitoringMode
+    let marketSession: String
+    let endPrice: Double
+    let maxPrice: Double
+    let minPrice: Double
+    let latestObservedAt: Date?
+    let performance1Minute: Double?
+    let performance5Minutes: Double?
+    let performance15Minutes: Double?
+    let status: CaptureTrackingStatus
+    let catalystReport: CatalystResearchReport?
+
+    var maxAdvancePercent: Double {
+        guard detectedPrice > 0 else { return 0 }
+        return ((maxPrice - detectedPrice) / detectedPrice) * 100
+    }
+
+    var maxDrawdownPercent: Double {
+        guard detectedPrice > 0 else { return 0 }
+        return ((minPrice - detectedPrice) / detectedPrice) * 100
+    }
 }
 
 struct AnalysisResult {

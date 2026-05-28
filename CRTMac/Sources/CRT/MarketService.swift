@@ -191,24 +191,57 @@ actor MarketService {
             feed: .iex
         )
         let eventBars = bars.filter { easternDate($0.timestamp) == date }
+            .sorted { $0.timestamp < $1.timestamp }
         guard !eventBars.isEmpty else {
             throw AnalysisError.remote("\(symbol) \(date) IEX 분봉이 없습니다. 거래일 또는 데이터 권한을 확인해주세요.")
         }
         let previousBars = bars.filter { easternDate($0.timestamp) < date }
         let baseline = previousBars.last?.close ?? eventBars.first?.open ?? eventBars.first!.close
-        let peak = eventBars.map(\.high).max() ?? baseline
+        let peakBar = eventBars.max { $0.high < $1.high } ?? eventBars[0]
+        let peak = peakBar.high
         guard baseline > 0 else {
             throw AnalysisError.remote("\(symbol)의 기준 가격을 계산하지 못했습니다.")
         }
         let change = ((peak - baseline) / baseline) * 100
         let qualifies = change >= 300
         let baselineLabel = previousBars.isEmpty ? "해당일 첫 분봉 시가" : "직전 수신 거래일 종가"
+        let eventOpen = eventBars.first?.open ?? baseline
+        let eventClose = eventBars.last?.close ?? peak
+        let eventVolume = eventBars.reduce(0) { $0 + $1.volume }
+        let eventDollarVolume = eventBars.reduce(0) { $0 + (($1.vwap ?? $1.close) * $1.volume) }
+        let minutesToPeak = max(0, peakBar.timestamp.timeIntervalSince(eventBars.first?.timestamp ?? peakBar.timestamp) / 60)
+        let closeFromBaseline = baseline > 0 ? ((eventClose - baseline) / baseline) * 100 : 0
+        let closeFromPeak = peak > 0 ? ((eventClose - peak) / peak) * 100 : 0
+        let oneMinute = performanceAfterPeak(eventBars, peak: peak, peakAt: peakBar.timestamp, minutes: 1)
+        let fiveMinutes = performanceAfterPeak(eventBars, peak: peak, peakAt: peakBar.timestamp, minutes: 5)
+        let fifteenMinutes = performanceAfterPeak(eventBars, peak: peak, peakAt: peakBar.timestamp, minutes: 15)
+        let sixtyMinutes = performanceAfterPeak(eventBars, peak: peak, peakAt: peakBar.timestamp, minutes: 60)
+        let sessionName = marketSession(peakBar.timestamp) ?? "장외 시간"
+        let riskLabel = riskLabel(closeFromPeak: closeFromPeak, performance15: fifteenMinutes, performance60: sixtyMinutes)
+        let outcomeLabel = qualifies
+            ? "300% 사건 · \(sessionName) · \(riskLabel)"
+            : "대조 표본 · \(String(format: "%+.1f", change))%"
         return SupporterVerificationResult(
             baselinePrice: baseline,
             peakPrice: peak,
             changePercent: change,
+            eventOpen: eventOpen,
+            eventClose: eventClose,
+            eventVolume: eventVolume,
+            eventDollarVolume: eventDollarVolume,
+            peakAt: peakBar.timestamp,
+            marketSession: sessionName,
+            minutesToPeak: minutesToPeak,
+            performance1Minute: oneMinute,
+            performance5Minutes: fiveMinutes,
+            performance15Minutes: fifteenMinutes,
+            performance60Minutes: sixtyMinutes,
+            closeFromBaselinePercent: closeFromBaseline,
+            closeFromPeakPercent: closeFromPeak,
+            outcomeLabel: outcomeLabel,
+            riskLabel: riskLabel,
             qualifies: qualifies,
-            note: "IEX 분봉 기준 · \(baselineLabel) 대비 장중 고가 · \(qualifies ? "300% 사건 표본" : "대조 표본")"
+            note: "IEX 분봉 기준 · \(baselineLabel) 대비 장중 고가 · 고점 \(DateFormatter.liveTime.string(from: peakBar.timestamp)) ET · \(qualifies ? "300% 사건 표본" : "대조 표본")"
         )
     }
 
@@ -615,7 +648,7 @@ actor MarketService {
 
     private func secHeaders(email: String) -> [String: String] {
         [
-            "User-Agent": "CRT/0.10 taki5cm \(email)",
+            "User-Agent": "CRT/0.11 taki5cm \(email)",
             "Accept-Encoding": "gzip, deflate"
         ]
     }
@@ -675,6 +708,31 @@ actor MarketService {
         if minute >= 570 && minute < 960 { return "정규장" }
         if minute >= 960 && minute < 1200 { return "애프터마켓" }
         return nil
+    }
+
+    private func performanceAfterPeak(
+        _ bars: [AlpacaMinuteBar],
+        peak: Double,
+        peakAt: Date,
+        minutes: Int
+    ) -> Double? {
+        guard peak > 0 else { return nil }
+        let target = peakAt.addingTimeInterval(TimeInterval(minutes * 60))
+        guard let bar = bars.first(where: { $0.timestamp >= target }) else { return nil }
+        return ((bar.close - peak) / peak) * 100
+    }
+
+    private func riskLabel(closeFromPeak: Double, performance15: Double?, performance60: Double?) -> String {
+        if closeFromPeak <= -60 || (performance60 ?? 0) <= -50 {
+            return "고위험 급락형"
+        }
+        if closeFromPeak <= -35 || (performance15 ?? 0) <= -25 {
+            return "되돌림 경계"
+        }
+        if closeFromPeak >= -10 {
+            return "강세 유지형"
+        }
+        return "중립 추적"
     }
 
     private func addDays(_ date: String, _ count: Int) -> String {

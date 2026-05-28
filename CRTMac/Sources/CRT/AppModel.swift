@@ -394,6 +394,25 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func exportSupporterDataset() {
+        guard let supporterDatasetStore else {
+            errorMessage = "Supporter ML 저장소가 아직 준비되지 않았습니다."
+            return
+        }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.nameFieldStringValue = "CRT-Supporter-Dataset.csv"
+        panel.title = "Supporter ML 데이터셋 CSV 내보내기"
+        panel.message = "학습 후보와 검증 결과를 저장할 위치를 선택하세요. API 키는 포함되지 않습니다."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try supporterDatasetStore.exportCSV(to: url)
+            supporterStatus = "Supporter ML 데이터셋을 CSV로 저장했습니다: \(url.lastPathComponent)"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func refreshCaptureHistory() {
         guard let captureHistoryStore else { return }
         do {

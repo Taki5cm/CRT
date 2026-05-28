@@ -59,7 +59,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.10")
+                Text("0.11")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -454,7 +454,7 @@ struct ContentView: View {
                 HStack {
                     Text("Supporter ML 데이터셋")
                         .font(.title3.bold())
-                    Text("0.10 · 검증 수집")
+                    Text("0.11 · 사건 데이터 확장")
                         .font(.caption.bold())
                         .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
                         .padding(.horizontal, 8)
@@ -462,14 +462,15 @@ struct ContentView: View {
                         .background(Capsule().fill(Color(red: 0.79, green: 0.97, blue: 0.38).opacity(0.13)))
                     Spacer()
                 }
-                Text("과거 300% 이상 급등 사건과 유사하지만 급등하지 않은 대조 표본을 함께 축적합니다. 검증된 데이터가 쌓이기 전에는 기대률이나 매매 판단을 표시하지 않습니다.")
+                Text("과거 300% 이상 급등 사건과 유사하지만 급등하지 않은 대조 표본을 함께 축적합니다. 고점 시간, 거래대금, 이후 되돌림까지 저장하지만 검증 전 예측률은 표시하지 않습니다.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 12) {
                     Metric(title: "검증 대기열", value: "\(model.supporterCandidates.count)건")
                     Metric(title: "300% 확인", value: "\(model.supporterCandidates.filter { $0.status == .qualifies }.count)건")
                     Metric(title: "대조 표본", value: "\(model.supporterCandidates.filter { $0.status == .comparison }.count)건")
-                    Metric(title: "현재 표시", value: "예측치 미제공")
+                    Metric(title: "위험 라벨", value: "\(model.supporterCandidates.filter { $0.riskLabel != nil }.count)건")
+                    Metric(title: "저장소", value: "ML v\(SupporterDatasetStore.schemaVersion)")
                 }
 
                 HStack(spacing: 10) {
@@ -479,6 +480,9 @@ struct ContentView: View {
                         .frame(width: 175)
                     Button("후보 추가") { model.addSupporterCandidate() }
                         .buttonStyle(.borderedProminent)
+                    Button("CSV 내보내기") { model.exportSupporterDataset() }
+                        .buttonStyle(.bordered)
+                        .disabled(model.supporterCandidates.isEmpty)
                     Text("BIRD, ASTC, AIXI는 초기 확인 대기열에 포함되어 있습니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -497,7 +501,7 @@ struct ContentView: View {
                     }
                 }
 
-                Text("검증은 현재 연결된 Alpaca IEX 분봉을 사용합니다. 전체시장 학습 자료로 확장할 때는 SIP 또는 라이선스가 확인된 전체시장 역사 자료가 필요합니다.")
+                Text("검증은 현재 연결된 Alpaca IEX 분봉을 사용합니다. 0.11부터 고점 도달 시간, 1·5·15·60분 후 성과, 종가 기준 되돌림, 위험 라벨을 함께 저장합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -956,41 +960,54 @@ private struct SupporterCandidateRow: View {
     let onPrepare: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(candidate.symbol)
-                .font(.callout.bold())
-                .frame(width: 58, alignment: .leading)
-            Text(candidate.eventDate ?? "거래일 필요")
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(candidate.eventDate == nil ? .orange : .secondary)
-                .frame(width: 105, alignment: .leading)
-            Text(candidate.status.label)
-                .font(.caption.bold())
-                .foregroundStyle(statusColor)
-                .frame(width: 92, alignment: .leading)
-            if let change = candidate.changePercent {
-                Text(String(format: "%+.2f%%", change))
-                    .font(.callout.monospacedDigit().bold())
-                    .foregroundStyle(change >= 0 ? .green : .red)
-                    .frame(width: 84, alignment: .trailing)
-            } else {
-                Text("--")
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Text(candidate.symbol)
+                    .font(.callout.bold())
+                    .frame(width: 58, alignment: .leading)
+                Text(candidate.eventDate ?? "거래일 필요")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(candidate.eventDate == nil ? .orange : .secondary)
+                    .frame(width: 105, alignment: .leading)
+                Text(candidate.status.label)
+                    .font(.caption.bold())
+                    .foregroundStyle(statusColor)
+                    .frame(width: 92, alignment: .leading)
+                if let change = candidate.changePercent {
+                    Text(String(format: "%+.2f%%", change))
+                        .font(.callout.monospacedDigit().bold())
+                        .foregroundStyle(change >= 0 ? .green : .red)
+                        .frame(width: 84, alignment: .trailing)
+                } else {
+                    Text("--")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 84, alignment: .trailing)
+                }
+                Text(candidate.outcomeLabel ?? candidate.verificationNote ?? candidate.note)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 84, alignment: .trailing)
+                    .lineLimit(1)
+                Spacer()
+                if candidate.eventDate == nil {
+                    Button("날짜 입력", action: onPrepare)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                } else {
+                    Button("가격 검증", action: onVerify)
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
             }
-            Text(candidate.verificationNote ?? candidate.note)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-            Spacer()
-            if candidate.eventDate == nil {
-                Button("날짜 입력", action: onPrepare)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-            } else {
-                Button("가격 검증", action: onVerify)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+            if candidate.peakAt != nil || candidate.riskLabel != nil {
+                HStack(spacing: 8) {
+                    MiniBadge(title: "고점", value: candidate.peakAt.map { DateFormatter.liveTime.string(from: $0) } ?? "--")
+                    MiniBadge(title: "세션", value: candidate.marketSession ?? "--")
+                    MiniBadge(title: "거래대금", value: candidate.eventDollarVolume.map { "$\($0.formatted(.number.notation(.compactName)))" } ?? "--")
+                    MiniBadge(title: "15분", value: percent(candidate.performance15Minutes))
+                    MiniBadge(title: "60분", value: percent(candidate.performance60Minutes))
+                    MiniBadge(title: "종가/고점", value: percent(candidate.closeFromPeakPercent))
+                    MiniBadge(title: "위험", value: candidate.riskLabel ?? "--")
+                }
             }
         }
         .padding(.horizontal, 10)
@@ -1005,6 +1022,29 @@ private struct SupporterCandidateRow: View {
         case .comparison: return .cyan
         case .failed: return .red
         }
+    }
+
+    private func percent(_ value: Double?) -> String {
+        guard let value else { return "--" }
+        return String(format: "%+.1f%%", value)
+    }
+}
+
+private struct MiniBadge: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .foregroundStyle(.primary)
+        }
+        .font(.caption2.monospacedDigit())
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(.white.opacity(0.045)))
     }
 }
 
@@ -1389,7 +1429,7 @@ private struct SignalChip: View {
     }
 }
 
-private extension DateFormatter {
+extension DateFormatter {
     static let selectedDate: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")

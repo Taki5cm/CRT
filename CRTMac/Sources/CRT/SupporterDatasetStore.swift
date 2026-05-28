@@ -4,7 +4,7 @@ import SQLite3
 private let supporterSQLiteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 final class SupporterDatasetStore {
-    static let schemaVersion = "1"
+    static let schemaVersion = "2"
 
     private var database: OpaquePointer?
 
@@ -52,6 +52,21 @@ final class SupporterDatasetStore {
                 baseline_price = ?,
                 peak_price = ?,
                 change_percent = ?,
+                event_open = ?,
+                event_close = ?,
+                event_volume = ?,
+                event_dollar_volume = ?,
+                peak_at = ?,
+                market_session = ?,
+                minutes_to_peak = ?,
+                performance_1m = ?,
+                performance_5m = ?,
+                performance_15m = ?,
+                performance_60m = ?,
+                close_from_baseline_percent = ?,
+                close_from_peak_percent = ?,
+                outcome_label = ?,
+                risk_label = ?,
                 verified_at = ?,
                 verification_note = ?
             WHERE id = ?;
@@ -61,9 +76,24 @@ final class SupporterDatasetStore {
             sqlite3_bind_double(statement, 2, result.baselinePrice)
             sqlite3_bind_double(statement, 3, result.peakPrice)
             sqlite3_bind_double(statement, 4, result.changePercent)
-            sqlite3_bind_double(statement, 5, Date().timeIntervalSince1970)
-            bindText(result.note, at: 6, statement: statement)
-            bindText(id, at: 7, statement: statement)
+            sqlite3_bind_double(statement, 5, result.eventOpen)
+            sqlite3_bind_double(statement, 6, result.eventClose)
+            sqlite3_bind_double(statement, 7, result.eventVolume)
+            sqlite3_bind_double(statement, 8, result.eventDollarVolume)
+            sqlite3_bind_double(statement, 9, result.peakAt.timeIntervalSince1970)
+            bindText(result.marketSession, at: 10, statement: statement)
+            sqlite3_bind_double(statement, 11, result.minutesToPeak)
+            bindOptionalDouble(result.performance1Minute, at: 12, statement: statement)
+            bindOptionalDouble(result.performance5Minutes, at: 13, statement: statement)
+            bindOptionalDouble(result.performance15Minutes, at: 14, statement: statement)
+            bindOptionalDouble(result.performance60Minutes, at: 15, statement: statement)
+            sqlite3_bind_double(statement, 16, result.closeFromBaselinePercent)
+            sqlite3_bind_double(statement, 17, result.closeFromPeakPercent)
+            bindText(result.outcomeLabel, at: 18, statement: statement)
+            bindText(result.riskLabel, at: 19, statement: statement)
+            sqlite3_bind_double(statement, 20, Date().timeIntervalSince1970)
+            bindText(result.note, at: 21, statement: statement)
+            bindText(id, at: 22, statement: statement)
         }
     }
 
@@ -82,7 +112,10 @@ final class SupporterDatasetStore {
     func fetchCandidates() throws -> [SupporterCandidate] {
         let sql = """
             SELECT id, symbol, event_date, note, status, baseline_price, peak_price,
-                change_percent, verified_at, verification_note
+                change_percent, event_open, event_close, event_volume, event_dollar_volume,
+                peak_at, market_session, minutes_to_peak, performance_1m, performance_5m,
+                performance_15m, performance_60m, close_from_baseline_percent,
+                close_from_peak_percent, outcome_label, risk_label, verified_at, verification_note
             FROM candidate_events ORDER BY created_at DESC;
             """
         var candidates: [SupporterCandidate] = []
@@ -96,11 +129,58 @@ final class SupporterDatasetStore {
                 baselinePrice: optionalDouble(statement, at: 5),
                 peakPrice: optionalDouble(statement, at: 6),
                 changePercent: optionalDouble(statement, at: 7),
-                verifiedAt: optionalDouble(statement, at: 8).map(Date.init(timeIntervalSince1970:)),
-                verificationNote: optionalText(statement, at: 9)
+                eventOpen: optionalDouble(statement, at: 8),
+                eventClose: optionalDouble(statement, at: 9),
+                eventVolume: optionalDouble(statement, at: 10),
+                eventDollarVolume: optionalDouble(statement, at: 11),
+                peakAt: optionalDouble(statement, at: 12).map(Date.init(timeIntervalSince1970:)),
+                marketSession: optionalText(statement, at: 13),
+                minutesToPeak: optionalDouble(statement, at: 14),
+                performance1Minute: optionalDouble(statement, at: 15),
+                performance5Minutes: optionalDouble(statement, at: 16),
+                performance15Minutes: optionalDouble(statement, at: 17),
+                performance60Minutes: optionalDouble(statement, at: 18),
+                closeFromBaselinePercent: optionalDouble(statement, at: 19),
+                closeFromPeakPercent: optionalDouble(statement, at: 20),
+                outcomeLabel: optionalText(statement, at: 21),
+                riskLabel: optionalText(statement, at: 22),
+                verifiedAt: optionalDouble(statement, at: 23).map(Date.init(timeIntervalSince1970:)),
+                verificationNote: optionalText(statement, at: 24)
             ))
         }
         return candidates
+    }
+
+    func exportCSV(to url: URL) throws {
+        let header = "symbol,event_date,status,baseline_price,peak_price,change_percent,event_open,event_close,event_volume,event_dollar_volume,peak_at_et,market_session,minutes_to_peak,performance_1m,performance_5m,performance_15m,performance_60m,close_from_baseline_percent,close_from_peak_percent,outcome_label,risk_label,note,verification_note"
+        let rows = try fetchCandidates().map { candidate in
+            [
+                candidate.symbol,
+                candidate.eventDate ?? "",
+                candidate.status.rawValue,
+                csvDouble(candidate.baselinePrice),
+                csvDouble(candidate.peakPrice),
+                csvDouble(candidate.changePercent),
+                csvDouble(candidate.eventOpen),
+                csvDouble(candidate.eventClose),
+                csvDouble(candidate.eventVolume),
+                csvDouble(candidate.eventDollarVolume),
+                candidate.peakAt.map { DateFormatter.displayEastern.string(from: $0) } ?? "",
+                candidate.marketSession ?? "",
+                csvDouble(candidate.minutesToPeak),
+                csvDouble(candidate.performance1Minute),
+                csvDouble(candidate.performance5Minutes),
+                csvDouble(candidate.performance15Minutes),
+                csvDouble(candidate.performance60Minutes),
+                csvDouble(candidate.closeFromBaselinePercent),
+                csvDouble(candidate.closeFromPeakPercent),
+                candidate.outcomeLabel ?? "",
+                candidate.riskLabel ?? "",
+                candidate.note,
+                candidate.verificationNote ?? ""
+            ].map(csvEscape).joined(separator: ",")
+        }
+        try ([header] + rows).joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
     }
 
     private func installSeedQueueIfNeeded() throws {
@@ -131,12 +211,43 @@ final class SupporterDatasetStore {
                 baseline_price REAL,
                 peak_price REAL,
                 change_percent REAL,
+                event_open REAL,
+                event_close REAL,
+                event_volume REAL,
+                event_dollar_volume REAL,
+                peak_at REAL,
+                market_session TEXT,
+                minutes_to_peak REAL,
+                performance_1m REAL,
+                performance_5m REAL,
+                performance_15m REAL,
+                performance_60m REAL,
+                close_from_baseline_percent REAL,
+                close_from_peak_percent REAL,
+                outcome_label TEXT,
+                risk_label TEXT,
                 created_at REAL NOT NULL,
                 verified_at REAL,
                 verification_note TEXT
             );
             """)
+        try addColumnIfNeeded("event_open", definition: "REAL")
+        try addColumnIfNeeded("event_close", definition: "REAL")
+        try addColumnIfNeeded("event_volume", definition: "REAL")
+        try addColumnIfNeeded("event_dollar_volume", definition: "REAL")
+        try addColumnIfNeeded("peak_at", definition: "REAL")
+        try addColumnIfNeeded("market_session", definition: "TEXT")
+        try addColumnIfNeeded("minutes_to_peak", definition: "REAL")
+        try addColumnIfNeeded("performance_1m", definition: "REAL")
+        try addColumnIfNeeded("performance_5m", definition: "REAL")
+        try addColumnIfNeeded("performance_15m", definition: "REAL")
+        try addColumnIfNeeded("performance_60m", definition: "REAL")
+        try addColumnIfNeeded("close_from_baseline_percent", definition: "REAL")
+        try addColumnIfNeeded("close_from_peak_percent", definition: "REAL")
+        try addColumnIfNeeded("outcome_label", definition: "TEXT")
+        try addColumnIfNeeded("risk_label", definition: "TEXT")
         try execute("CREATE INDEX IF NOT EXISTS idx_supporter_date ON candidate_events(event_date DESC);")
+        try execute("CREATE INDEX IF NOT EXISTS idx_supporter_status ON candidate_events(status);")
         try withStatement("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?);") { statement in
             bindText(Self.schemaVersion, at: 1, statement: statement)
         }
@@ -171,6 +282,21 @@ final class SupporterDatasetStore {
         }
     }
 
+    private func addColumnIfNeeded(_ column: String, definition: String) throws {
+        guard try !hasColumn(column, in: "candidate_events") else { return }
+        try execute("ALTER TABLE candidate_events ADD COLUMN \(column) \(definition);")
+    }
+
+    private func hasColumn(_ column: String, in table: String) throws -> Bool {
+        var found = false
+        try withRows("PRAGMA table_info(\(table));") { statement in
+            if columnText(statement, at: 1) == column {
+                found = true
+            }
+        }
+        return found
+    }
+
     private func bindText(_ value: String, at index: Int32, statement: OpaquePointer) {
         sqlite3_bind_text(statement, index, value, -1, supporterSQLiteTransient)
     }
@@ -178,6 +304,14 @@ final class SupporterDatasetStore {
     private func bindOptionalText(_ value: String?, at index: Int32, statement: OpaquePointer) {
         if let value {
             bindText(value, at: index, statement: statement)
+        } else {
+            sqlite3_bind_null(statement, index)
+        }
+    }
+
+    private func bindOptionalDouble(_ value: Double?, at index: Int32, statement: OpaquePointer) {
+        if let value {
+            sqlite3_bind_double(statement, index, value)
         } else {
             sqlite3_bind_null(statement, index)
         }
@@ -199,6 +333,16 @@ final class SupporterDatasetStore {
     private var errorMessage: String {
         guard let database, let raw = sqlite3_errmsg(database) else { return "알 수 없는 저장 오류" }
         return String(cString: raw)
+    }
+
+    private func csvDouble(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return String(format: "%.4f", value)
+    }
+
+    private func csvEscape(_ value: String) -> String {
+        let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+        return "\"\(escaped)\""
     }
 }
 

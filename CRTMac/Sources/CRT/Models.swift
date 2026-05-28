@@ -391,6 +391,21 @@ struct SupporterCandidate: Identifiable {
     let baselinePrice: Double?
     let peakPrice: Double?
     let changePercent: Double?
+    let eventOpen: Double?
+    let eventClose: Double?
+    let eventVolume: Double?
+    let eventDollarVolume: Double?
+    let peakAt: Date?
+    let marketSession: String?
+    let minutesToPeak: Double?
+    let performance1Minute: Double?
+    let performance5Minutes: Double?
+    let performance15Minutes: Double?
+    let performance60Minutes: Double?
+    let closeFromBaselinePercent: Double?
+    let closeFromPeakPercent: Double?
+    let outcomeLabel: String?
+    let riskLabel: String?
     let verifiedAt: Date?
     let verificationNote: String?
 }
@@ -399,6 +414,21 @@ struct SupporterVerificationResult {
     let baselinePrice: Double
     let peakPrice: Double
     let changePercent: Double
+    let eventOpen: Double
+    let eventClose: Double
+    let eventVolume: Double
+    let eventDollarVolume: Double
+    let peakAt: Date
+    let marketSession: String
+    let minutesToPeak: Double
+    let performance1Minute: Double?
+    let performance5Minutes: Double?
+    let performance15Minutes: Double?
+    let performance60Minutes: Double?
+    let closeFromBaselinePercent: Double
+    let closeFromPeakPercent: Double
+    let outcomeLabel: String
+    let riskLabel: String
     let qualifies: Bool
     let note: String
 }

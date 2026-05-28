@@ -4,7 +4,7 @@ import SQLite3
 private let supporterSQLiteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 final class SupporterDatasetStore {
-    static let schemaVersion = "2"
+    static let schemaVersion = "3"
 
     private var database: OpaquePointer?
 
@@ -67,6 +67,10 @@ final class SupporterDatasetStore {
                 close_from_peak_percent = ?,
                 outcome_label = ?,
                 risk_label = ?,
+                news_count = ?,
+                filing_count = ?,
+                dilution_forms = ?,
+                evidence_summary = ?,
                 verified_at = ?,
                 verification_note = ?
             WHERE id = ?;
@@ -91,9 +95,13 @@ final class SupporterDatasetStore {
             sqlite3_bind_double(statement, 17, result.closeFromPeakPercent)
             bindText(result.outcomeLabel, at: 18, statement: statement)
             bindText(result.riskLabel, at: 19, statement: statement)
-            sqlite3_bind_double(statement, 20, Date().timeIntervalSince1970)
-            bindText(result.note, at: 21, statement: statement)
-            bindText(id, at: 22, statement: statement)
+            sqlite3_bind_int(statement, 20, Int32(result.newsCount))
+            sqlite3_bind_int(statement, 21, Int32(result.filingCount))
+            bindOptionalText(result.dilutionForms, at: 22, statement: statement)
+            bindText(result.evidenceSummary, at: 23, statement: statement)
+            sqlite3_bind_double(statement, 24, Date().timeIntervalSince1970)
+            bindText(result.note, at: 25, statement: statement)
+            bindText(id, at: 26, statement: statement)
         }
     }
 
@@ -115,7 +123,8 @@ final class SupporterDatasetStore {
                 change_percent, event_open, event_close, event_volume, event_dollar_volume,
                 peak_at, market_session, minutes_to_peak, performance_1m, performance_5m,
                 performance_15m, performance_60m, close_from_baseline_percent,
-                close_from_peak_percent, outcome_label, risk_label, verified_at, verification_note
+                close_from_peak_percent, outcome_label, risk_label, news_count, filing_count,
+                dilution_forms, evidence_summary, verified_at, verification_note
             FROM candidate_events ORDER BY created_at DESC;
             """
         var candidates: [SupporterCandidate] = []
@@ -144,43 +153,53 @@ final class SupporterDatasetStore {
                 closeFromPeakPercent: optionalDouble(statement, at: 20),
                 outcomeLabel: optionalText(statement, at: 21),
                 riskLabel: optionalText(statement, at: 22),
-                verifiedAt: optionalDouble(statement, at: 23).map(Date.init(timeIntervalSince1970:)),
-                verificationNote: optionalText(statement, at: 24)
+                newsCount: Int(sqlite3_column_int(statement, 23)),
+                filingCount: Int(sqlite3_column_int(statement, 24)),
+                dilutionForms: optionalText(statement, at: 25),
+                evidenceSummary: optionalText(statement, at: 26),
+                verifiedAt: optionalDouble(statement, at: 27).map(Date.init(timeIntervalSince1970:)),
+                verificationNote: optionalText(statement, at: 28)
             ))
         }
         return candidates
     }
 
     func exportCSV(to url: URL) throws {
-        let header = "symbol,event_date,status,baseline_price,peak_price,change_percent,event_open,event_close,event_volume,event_dollar_volume,peak_at_et,market_session,minutes_to_peak,performance_1m,performance_5m,performance_15m,performance_60m,close_from_baseline_percent,close_from_peak_percent,outcome_label,risk_label,note,verification_note"
-        let rows = try fetchCandidates().map { candidate in
-            [
-                candidate.symbol,
-                candidate.eventDate ?? "",
-                candidate.status.rawValue,
-                csvDouble(candidate.baselinePrice),
-                csvDouble(candidate.peakPrice),
-                csvDouble(candidate.changePercent),
-                csvDouble(candidate.eventOpen),
-                csvDouble(candidate.eventClose),
-                csvDouble(candidate.eventVolume),
-                csvDouble(candidate.eventDollarVolume),
-                candidate.peakAt.map { DateFormatter.displayEastern.string(from: $0) } ?? "",
-                candidate.marketSession ?? "",
-                csvDouble(candidate.minutesToPeak),
-                csvDouble(candidate.performance1Minute),
-                csvDouble(candidate.performance5Minutes),
-                csvDouble(candidate.performance15Minutes),
-                csvDouble(candidate.performance60Minutes),
-                csvDouble(candidate.closeFromBaselinePercent),
-                csvDouble(candidate.closeFromPeakPercent),
-                candidate.outcomeLabel ?? "",
-                candidate.riskLabel ?? "",
-                candidate.note,
-                candidate.verificationNote ?? ""
-            ].map(csvEscape).joined(separator: ",")
-        }
+        let header = "symbol,event_date,status,baseline_price,peak_price,change_percent,event_open,event_close,event_volume,event_dollar_volume,peak_at_et,market_session,minutes_to_peak,performance_1m,performance_5m,performance_15m,performance_60m,close_from_baseline_percent,close_from_peak_percent,outcome_label,risk_label,news_count,filing_count,dilution_forms,evidence_summary,note,verification_note"
+        let rows = try fetchCandidates().map(csvRow)
         try ([header] + rows).joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func csvRow(for candidate: SupporterCandidate) -> String {
+        var fields: [String] = []
+        fields.append(candidate.symbol)
+        fields.append(candidate.eventDate ?? "")
+        fields.append(candidate.status.rawValue)
+        fields.append(csvDouble(candidate.baselinePrice))
+        fields.append(csvDouble(candidate.peakPrice))
+        fields.append(csvDouble(candidate.changePercent))
+        fields.append(csvDouble(candidate.eventOpen))
+        fields.append(csvDouble(candidate.eventClose))
+        fields.append(csvDouble(candidate.eventVolume))
+        fields.append(csvDouble(candidate.eventDollarVolume))
+        fields.append(candidate.peakAt.map { DateFormatter.displayEastern.string(from: $0) } ?? "")
+        fields.append(candidate.marketSession ?? "")
+        fields.append(csvDouble(candidate.minutesToPeak))
+        fields.append(csvDouble(candidate.performance1Minute))
+        fields.append(csvDouble(candidate.performance5Minutes))
+        fields.append(csvDouble(candidate.performance15Minutes))
+        fields.append(csvDouble(candidate.performance60Minutes))
+        fields.append(csvDouble(candidate.closeFromBaselinePercent))
+        fields.append(csvDouble(candidate.closeFromPeakPercent))
+        fields.append(candidate.outcomeLabel ?? "")
+        fields.append(candidate.riskLabel ?? "")
+        fields.append(String(candidate.newsCount))
+        fields.append(String(candidate.filingCount))
+        fields.append(candidate.dilutionForms ?? "")
+        fields.append(candidate.evidenceSummary ?? "")
+        fields.append(candidate.note)
+        fields.append(candidate.verificationNote ?? "")
+        return fields.map(csvEscape).joined(separator: ",")
     }
 
     private func installSeedQueueIfNeeded() throws {
@@ -226,6 +245,10 @@ final class SupporterDatasetStore {
                 close_from_peak_percent REAL,
                 outcome_label TEXT,
                 risk_label TEXT,
+                news_count INTEGER DEFAULT 0,
+                filing_count INTEGER DEFAULT 0,
+                dilution_forms TEXT,
+                evidence_summary TEXT,
                 created_at REAL NOT NULL,
                 verified_at REAL,
                 verification_note TEXT
@@ -246,6 +269,10 @@ final class SupporterDatasetStore {
         try addColumnIfNeeded("close_from_peak_percent", definition: "REAL")
         try addColumnIfNeeded("outcome_label", definition: "TEXT")
         try addColumnIfNeeded("risk_label", definition: "TEXT")
+        try addColumnIfNeeded("news_count", definition: "INTEGER DEFAULT 0")
+        try addColumnIfNeeded("filing_count", definition: "INTEGER DEFAULT 0")
+        try addColumnIfNeeded("dilution_forms", definition: "TEXT")
+        try addColumnIfNeeded("evidence_summary", definition: "TEXT")
         try execute("CREATE INDEX IF NOT EXISTS idx_supporter_date ON candidate_events(event_date DESC);")
         try execute("CREATE INDEX IF NOT EXISTS idx_supporter_status ON candidate_events(status);")
         try withStatement("INSERT OR REPLACE INTO metadata (key, value) VALUES ('schema_version', ?);") { statement in

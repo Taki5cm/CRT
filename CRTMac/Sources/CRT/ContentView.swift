@@ -59,7 +59,7 @@ struct ContentView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .tracking(2)
                     .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
-                Text("0.11")
+                Text("0.12")
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(.secondary)
@@ -454,7 +454,7 @@ struct ContentView: View {
                 HStack {
                     Text("Supporter ML 데이터셋")
                         .font(.title3.bold())
-                    Text("0.11 · 사건 데이터 확장")
+                    Text("0.12 · 근거 결합")
                         .font(.caption.bold())
                         .foregroundStyle(Color(red: 0.79, green: 0.97, blue: 0.38))
                         .padding(.horizontal, 8)
@@ -501,7 +501,7 @@ struct ContentView: View {
                     }
                 }
 
-                Text("검증은 현재 연결된 Alpaca IEX 분봉을 사용합니다. 0.11부터 고점 도달 시간, 1·5·15·60분 후 성과, 종가 기준 되돌림, 위험 라벨을 함께 저장합니다.")
+                Text("검증은 Alpaca IEX 분봉을 사용합니다. 0.12부터 가격 경로에 뉴스·SEC 공시 개수와 희석 가능 양식 요약을 함께 저장합니다.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -732,7 +732,7 @@ private struct IntradayChartPanel: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("실시간 차트")
                         .font(.headline.bold())
-                    Text("감시·조회 종목의 분봉 흐름을 한눈에 확인합니다.")
+                    Text("분봉과 일봉을 전환하고 좌우 이동·확대 축소로 흐름을 확인합니다.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -750,7 +750,7 @@ private struct IntradayChartPanel: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.segmented)
-                .frame(width: 208)
+                .frame(width: 262)
                 Button {
                     model.refreshIntradayChart()
                 } label: {
@@ -764,18 +764,59 @@ private struct IntradayChartPanel: View {
                 Metric(title: "현재 봉", value: latestPrice)
                 Metric(title: "표시 구간 변화", value: displayedChange)
                 Metric(title: "봉 간격", value: model.chartInterval.label)
+                Metric(title: "표시 봉 수", value: "\(model.visibleChartCandles.count)개")
                 if model.chartIsLoading {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
 
-            CandleCanvas(candles: Array(model.chartCandles.suffix(84)))
-                .frame(height: 245)
+            HStack(spacing: 8) {
+                Button {
+                    model.shiftChart(left: true)
+                } label: {
+                    Label("이전", systemImage: "chevron.left")
+                }
+                Button {
+                    model.shiftChart(left: false)
+                } label: {
+                    Label("최근", systemImage: "chevron.right")
+                }
+                Divider().frame(height: 20)
+                Button {
+                    model.zoomChart(inward: true)
+                } label: {
+                    Label("확대", systemImage: "plus.magnifyingglass")
+                }
+                Button {
+                    model.zoomChart(inward: false)
+                } label: {
+                    Label("축소", systemImage: "minus.magnifyingglass")
+                }
+                Text("차트 위에서 좌우로 드래그해 이동할 수 있습니다.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            CandleCanvas(candles: model.visibleChartCandles, interval: model.chartInterval)
+                .frame(height: 292)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color.black.opacity(0.22))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.065)))
+                )
+                .gesture(
+                    DragGesture(minimumDistance: 20).onEnded { value in
+                        model.shiftChart(left: value.translation.width < 0)
+                    }
+                )
+                .simultaneousGesture(
+                    MagnificationGesture().onEnded { scale in
+                        model.zoomChart(inward: scale > 1)
+                    }
                 )
 
             Text(model.chartStatus)
@@ -795,13 +836,14 @@ private struct IntradayChartPanel: View {
     }
 
     private var displayedChange: String {
-        guard let first = model.chartCandles.first, let last = model.chartCandles.last, first.open > 0 else { return "--" }
+        guard let first = model.visibleChartCandles.first, let last = model.visibleChartCandles.last, first.open > 0 else { return "--" }
         return String(format: "%+.2f%%", ((last.close - first.open) / first.open) * 100)
     }
 }
 
 private struct CandleCanvas: View {
     let candles: [PriceCandle]
+    let interval: ChartInterval
 
     var body: some View {
         if candles.isEmpty {
@@ -815,10 +857,12 @@ private struct CandleCanvas: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             Canvas { context, size in
-                let plotRect = CGRect(x: 12, y: 12, width: size.width - 72, height: size.height - 40)
+                let plotRect = CGRect(x: 12, y: 12, width: size.width - 72, height: size.height - 86)
+                let volumeRect = CGRect(x: plotRect.minX, y: plotRect.maxY + 10, width: plotRect.width, height: 42)
                 let lowest = candles.map(\.low).min() ?? 0
                 let highest = candles.map(\.high).max() ?? lowest + 1
                 let range = max(highest - lowest, max(highest * 0.002, 0.01))
+                let maxVolume = max(candles.map(\.volume).max() ?? 1, 1)
                 let candleWidth = max(2, min(10, plotRect.width / CGFloat(candles.count) * 0.64))
                 let step = plotRect.width / CGFloat(max(candles.count, 1))
                 func y(_ price: Double) -> CGFloat {
@@ -842,6 +886,14 @@ private struct CandleCanvas: View {
                 for (index, candle) in candles.enumerated() {
                     let centerX = plotRect.minX + step * (CGFloat(index) + 0.5)
                     let color: Color = candle.close >= candle.open ? .green : .red
+                    let volumeHeight = max(1, CGFloat(candle.volume / maxVolume) * volumeRect.height)
+                    let volumeBar = CGRect(
+                        x: centerX - candleWidth / 2,
+                        y: volumeRect.maxY - volumeHeight,
+                        width: candleWidth,
+                        height: volumeHeight
+                    )
+                    context.fill(Path(roundedRect: volumeBar, cornerRadius: 1), with: .color(color.opacity(0.24)))
                     var wick = Path()
                     wick.move(to: CGPoint(x: centerX, y: y(candle.high)))
                     wick.addLine(to: CGPoint(x: centerX, y: y(candle.low)))
@@ -861,11 +913,15 @@ private struct CandleCanvas: View {
                 }
 
                 if let first = candles.first, let last = candles.last {
-                    context.draw(Text(DateFormatter.liveTime.string(from: first.startedAt)).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: plotRect.minX, y: plotRect.maxY + 16), anchor: .leading)
-                    context.draw(Text(DateFormatter.liveTime.string(from: last.startedAt)).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: plotRect.maxX, y: plotRect.maxY + 16), anchor: .trailing)
+                    context.draw(Text(label(for: first.startedAt)).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: plotRect.minX, y: volumeRect.maxY + 16), anchor: .leading)
+                    context.draw(Text(label(for: last.startedAt)).font(.caption2).foregroundStyle(.secondary), at: CGPoint(x: plotRect.maxX, y: volumeRect.maxY + 16), anchor: .trailing)
                 }
             }
         }
+    }
+
+    private func label(for date: Date) -> String {
+        interval.isDaily ? DateFormatter.chartDay.string(from: date) : DateFormatter.liveTime.string(from: date)
     }
 }
 
@@ -1006,8 +1062,15 @@ private struct SupporterCandidateRow: View {
                     MiniBadge(title: "15분", value: percent(candidate.performance15Minutes))
                     MiniBadge(title: "60분", value: percent(candidate.performance60Minutes))
                     MiniBadge(title: "종가/고점", value: percent(candidate.closeFromPeakPercent))
+                    MiniBadge(title: "뉴스", value: "\(candidate.newsCount)")
+                    MiniBadge(title: "SEC", value: "\(candidate.filingCount)")
                     MiniBadge(title: "위험", value: candidate.riskLabel ?? "--")
                 }
+            }
+            if let evidence = candidate.evidenceSummary, !evidence.isEmpty {
+                Text(evidence)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 10)
@@ -1458,6 +1521,14 @@ extension DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ko_KR")
         formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
+    static let chartDay: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.timeZone = TimeZone(identifier: "America/New_York")
+        formatter.dateFormat = "MM/dd"
         return formatter
     }()
 }

@@ -65,10 +65,13 @@ enum ChartInterval: Int, CaseIterable, Identifiable {
     case threeMinutes = 3
     case fiveMinutes = 5
     case fifteenMinutes = 15
+    case oneDay = 1440
 
     var id: Int { rawValue }
-    var label: String { "\(rawValue)분" }
+    var label: String { self == .oneDay ? "일봉" : "\(rawValue)분" }
     var seconds: TimeInterval { TimeInterval(rawValue * 60) }
+    var alpacaTimeframe: String { self == .oneDay ? "1Day" : "1Min" }
+    var isDaily: Bool { self == .oneDay }
 }
 
 struct PriceCandle: Identifiable {
@@ -86,7 +89,7 @@ struct PriceCandle: Identifiable {
     }
 
     static func aggregated(_ candles: [PriceCandle], interval: ChartInterval) -> [PriceCandle] {
-        guard interval != .oneMinute else { return candles.sorted { $0.startedAt < $1.startedAt } }
+        guard interval != .oneMinute, interval != .oneDay else { return candles.sorted { $0.startedAt < $1.startedAt } }
         let seconds = interval.seconds
         let grouped = Dictionary(grouping: candles) { candle in
             Date(timeIntervalSince1970: floor(candle.startedAt.timeIntervalSince1970 / seconds) * seconds)
@@ -406,6 +409,10 @@ struct SupporterCandidate: Identifiable {
     let closeFromPeakPercent: Double?
     let outcomeLabel: String?
     let riskLabel: String?
+    let newsCount: Int
+    let filingCount: Int
+    let dilutionForms: String?
+    let evidenceSummary: String?
     let verifiedAt: Date?
     let verificationNote: String?
 }
@@ -429,6 +436,10 @@ struct SupporterVerificationResult {
     let closeFromPeakPercent: Double
     let outcomeLabel: String
     let riskLabel: String
+    let newsCount: Int
+    let filingCount: Int
+    let dilutionForms: String?
+    let evidenceSummary: String
     let qualifies: Bool
     let note: String
 }

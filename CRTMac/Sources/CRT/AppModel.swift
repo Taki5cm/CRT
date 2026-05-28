@@ -45,9 +45,18 @@ final class AppModel: ObservableObject {
     @Published var chartSymbolText = "AAPL"
     @Published var selectedChartSymbol = "AAPL"
     @Published var chartInterval: ChartInterval = .oneMinute {
-        didSet { rebuildDisplayedCandles() }
+        didSet {
+            chartScrollOffset = 0
+            if chartInterval.isDaily != oldValue.isDaily {
+                refreshIntradayChart()
+            } else {
+                rebuildDisplayedCandles()
+            }
+        }
     }
     @Published var chartCandles: [PriceCandle] = []
+    @Published var chartVisibleCount = 84
+    @Published var chartScrollOffset = 0
     @Published var chartIsLoading = false
     @Published var chartStatus = "종목을 선택하면 오늘의 분봉 차트를 불러옵니다."
     @Published var supporterCandidates: [SupporterCandidate] = []
@@ -325,6 +334,7 @@ final class AppModel: ObservableObject {
         }
         chartIsLoading = true
         chartStatus = "\(symbol) \(chartInterval.label) 차트를 불러오고 있습니다..."
+        let interval = chartInterval
         Task {
             defer { chartIsLoading = false }
             do {
@@ -332,18 +342,47 @@ final class AppModel: ObservableObject {
                     symbol: symbol,
                     alpacaKey: key,
                     alpacaSecret: secret,
-                    feed: liveMonitoringMode.feed
+                    feed: liveMonitoringMode.feed,
+                    interval: interval
                 )
                 guard symbol == selectedChartSymbol else { return }
                 rawChartCandles = candles
+                chartScrollOffset = 0
                 rebuildDisplayedCandles()
                 chartStatus = candles.isEmpty
-                    ? "\(symbol)의 오늘 수신 가능한 분봉이 아직 없습니다."
-                    : "\(symbol) · \(liveMonitoringMode.feed.rawValue.uppercased()) 분봉 \(candles.count)개 · 감시 중 체결은 현재 봉에 반영됩니다."
+                    ? "\(symbol)의 수신 가능한 \(interval.label) 자료가 아직 없습니다."
+                    : "\(symbol) · \(liveMonitoringMode.feed.rawValue.uppercased()) \(interval.label) \(candles.count)개 · \(interval.isDaily ? "일봉은 최근 약 1년 범위입니다." : "감시 중 체결은 현재 봉에 반영됩니다.")"
             } catch {
                 chartStatus = error.localizedDescription
             }
         }
+    }
+
+    var visibleChartCandles: [PriceCandle] {
+        guard !chartCandles.isEmpty else { return [] }
+        let count = min(chartVisibleCount, chartCandles.count)
+        let maxOffset = max(0, chartCandles.count - count)
+        let offset = min(chartScrollOffset, maxOffset)
+        let end = chartCandles.count - offset
+        let start = max(0, end - count)
+        return Array(chartCandles[start..<end])
+    }
+
+    func zoomChart(inward: Bool) {
+        let options = chartInterval.isDaily ? [30, 60, 120, 240] : [30, 60, 84, 160, 240]
+        guard let currentIndex = options.firstIndex(where: { $0 >= chartVisibleCount }) else {
+            chartVisibleCount = options.last ?? chartVisibleCount
+            return
+        }
+        let nextIndex = inward ? max(0, currentIndex - 1) : min(options.count - 1, currentIndex + 1)
+        chartVisibleCount = options[nextIndex]
+        clampChartScroll()
+    }
+
+    func shiftChart(left: Bool) {
+        let step = max(5, chartVisibleCount / 3)
+        chartScrollOffset += left ? step : -step
+        clampChartScroll()
     }
 
     func addSupporterCandidate() {
@@ -381,7 +420,9 @@ final class AppModel: ObservableObject {
                     symbol: candidate.symbol,
                     date: date,
                     alpacaKey: alpacaKey.trimmingCharacters(in: .whitespacesAndNewlines),
-                    alpacaSecret: alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+                    alpacaSecret: alpacaSecret.trimmingCharacters(in: .whitespacesAndNewlines),
+                    massiveKey: massiveKey.trimmingCharacters(in: .whitespacesAndNewlines),
+                    secEmail: secEmail.trimmingCharacters(in: .whitespacesAndNewlines)
                 )
                 try supporterDatasetStore?.saveVerification(result, for: candidate.id)
                 refreshSupporterCandidates()
@@ -531,10 +572,16 @@ final class AppModel: ObservableObject {
 
     private func rebuildDisplayedCandles() {
         chartCandles = PriceCandle.aggregated(rawChartCandles, interval: chartInterval)
+        clampChartScroll()
+    }
+
+    private func clampChartScroll() {
+        chartVisibleCount = max(10, chartVisibleCount)
+        chartScrollOffset = min(max(0, chartScrollOffset), max(0, chartCandles.count - min(chartVisibleCount, chartCandles.count)))
     }
 
     private func appendChartTrade(_ trade: LiveTrade) {
-        guard trade.symbol == selectedChartSymbol else { return }
+        guard trade.symbol == selectedChartSymbol, !chartInterval.isDaily else { return }
         let minuteStart = Date(timeIntervalSince1970: floor(trade.occurredAt.timeIntervalSince1970 / 60) * 60)
         if let index = rawChartCandles.lastIndex(where: { $0.startedAt == minuteStart }) {
             let existing = rawChartCandles[index]

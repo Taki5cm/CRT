@@ -49,11 +49,11 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         content.sound = .default
 
         if result.reports.isEmpty {
-            content.title = "CRT 0.11 분석 완료"
+            content.title = "CRT 0.12 분석 완료"
             content.body = "\(result.date) 기준에 맞는 급변 후보가 발견되지 않았습니다."
         } else {
             let symbols = result.reports.prefix(3).map(\.symbol).joined(separator: ", ")
-            content.title = "CRT 0.11 급변 후보 \(result.reports.count)건"
+            content.title = "CRT 0.12 급변 후보 \(result.reports.count)건"
             content.body = "\(result.date) 분석: \(symbols) 후보를 확인하세요."
         }
 
@@ -70,7 +70,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
         let content = UNMutableNotificationContent()
         content.sound = .default
-        content.title = "CRT 0.11 \(alert.direction.label) 포착: \(alert.symbol)"
+        content.title = "CRT 0.12 \(alert.direction.label) 포착: \(alert.symbol)"
         content.body = "\(alert.windowSeconds)초 안에 \(String(format: "%+.2f", alert.changePercent))% · 현재 $\(String(format: "%.2f", alert.latestPrice)) · 원인 확인 필요"
 
         let request = UNNotificationRequest(
@@ -86,7 +86,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
 
         let content = UNMutableNotificationContent()
         content.sound = .default
-        content.title = "CRT 0.11 2차 보고: \(symbol)"
+        content.title = "CRT 0.12 2차 보고: \(symbol)"
         content.body = report.summary
 
         let request = UNNotificationRequest(

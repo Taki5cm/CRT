@@ -151,28 +151,38 @@ actor MarketService {
         symbol: String,
         alpacaKey: String,
         alpacaSecret: String,
-        feed: LiveDataFeed
+        feed: LiveDataFeed,
+        interval: ChartInterval
     ) async throws -> [PriceCandle] {
         guard !alpacaKey.isEmpty, !alpacaSecret.isEmpty else {
             throw AnalysisError.missingCredential("설정에서 Alpaca API Key와 Secret Key를 먼저 저장해주세요.")
         }
-        let today = easternDate(Date())
+        let endDate = Date()
+        let startDate = interval.isDaily
+            ? Calendar.current.date(byAdding: .day, value: -390, to: endDate) ?? endDate
+            : DateFormatter.easternDate.date(from: easternDate(endDate)) ?? endDate
         let bars = try await alpacaSingleSymbolBars(
             key: alpacaKey,
             secret: alpacaSecret,
             symbol: symbol,
-            start: "\(today)T00:00:00Z",
-            end: ISO8601DateFormatter.captureQuery.string(from: Date().addingTimeInterval(60)),
-            feed: feed
+            start: ISO8601DateFormatter.captureQuery.string(from: startDate),
+            end: ISO8601DateFormatter.captureQuery.string(from: endDate.addingTimeInterval(60)),
+            feed: feed,
+            timeframe: interval.alpacaTimeframe
         )
-        return bars.filter { easternDate($0.timestamp) == today }.map(\.candle)
+        let today = easternDate(endDate)
+        return bars
+            .filter { interval.isDaily || easternDate($0.timestamp) == today }
+            .map(\.candle)
     }
 
     func verifySupporterCandidate(
         symbol: String,
         date: String,
         alpacaKey: String,
-        alpacaSecret: String
+        alpacaSecret: String,
+        massiveKey: String,
+        secEmail: String
     ) async throws -> SupporterVerificationResult {
         guard !alpacaKey.isEmpty, !alpacaSecret.isEmpty else {
             throw AnalysisError.missingCredential("후보 검증을 위해 설정에서 Alpaca API Key와 Secret Key를 저장해주세요.")
@@ -188,7 +198,8 @@ actor MarketService {
             symbol: symbol,
             start: "\(start)T00:00:00Z",
             end: "\(end)T23:59:59Z",
-            feed: .iex
+            feed: .iex,
+            timeframe: "1Min"
         )
         let eventBars = bars.filter { easternDate($0.timestamp) == date }
             .sorted { $0.timestamp < $1.timestamp }
@@ -218,6 +229,14 @@ actor MarketService {
         let sixtyMinutes = performanceAfterPeak(eventBars, peak: peak, peakAt: peakBar.timestamp, minutes: 60)
         let sessionName = marketSession(peakBar.timestamp) ?? "장외 시간"
         let riskLabel = riskLabel(closeFromPeak: closeFromPeak, performance15: fifteenMinutes, performance60: sixtyMinutes)
+        let evidence = await supporterEvidence(
+            symbol: symbol,
+            date: date,
+            alpacaKey: alpacaKey,
+            alpacaSecret: alpacaSecret,
+            massiveKey: massiveKey,
+            secEmail: secEmail
+        )
         let outcomeLabel = qualifies
             ? "300% 사건 · \(sessionName) · \(riskLabel)"
             : "대조 표본 · \(String(format: "%+.1f", change))%"
@@ -240,6 +259,10 @@ actor MarketService {
             closeFromPeakPercent: closeFromPeak,
             outcomeLabel: outcomeLabel,
             riskLabel: riskLabel,
+            newsCount: evidence.newsCount,
+            filingCount: evidence.filingCount,
+            dilutionForms: evidence.dilutionForms,
+            evidenceSummary: evidence.summary,
             qualifies: qualifies,
             note: "IEX 분봉 기준 · \(baselineLabel) 대비 장중 고가 · 고점 \(DateFormatter.liveTime.string(from: peakBar.timestamp)) ET · \(qualifies ? "300% 사건 표본" : "대조 표본")"
         )
@@ -342,6 +365,58 @@ actor MarketService {
             classification: classification,
             filings: filings,
             news: news
+        )
+    }
+
+    private func supporterEvidence(
+        symbol: String,
+        date: String,
+        alpacaKey: String,
+        alpacaSecret: String,
+        massiveKey: String,
+        secEmail: String
+    ) async -> SupporterEvidenceSummary {
+        var newsCount = 0
+        var filingCount = 0
+        var dilutionForms: [String] = []
+        var notes: [String] = []
+
+        if !alpacaKey.isEmpty, !alpacaSecret.isEmpty {
+            do {
+                let news = try await alpacaNews(key: alpacaKey, secret: alpacaSecret, symbols: [symbol], date: date)
+                newsCount = news[symbol]?.count ?? 0
+                notes.append(newsCount > 0 ? "뉴스 \(newsCount)건" : "뉴스 없음")
+            } catch {
+                notes.append("뉴스 조회 실패")
+            }
+        } else {
+            notes.append("뉴스 키 없음")
+        }
+
+        if secEmail.contains("@") {
+            do {
+                let knownCIKs = massiveKey.isEmpty ? [:] : await massiveCIKByTicker(apiKey: massiveKey, symbols: [symbol])
+                let filings = try await fetchFilings(symbols: [symbol], date: date, email: secEmail, knownCIKs: knownCIKs)
+                let symbolFilings = filings[symbol] ?? []
+                filingCount = symbolFilings.count
+                dilutionForms = Array(Set(symbolFilings.map(\.form).filter(isDilutionRelated))).sorted()
+                if dilutionForms.isEmpty {
+                    notes.append(filingCount > 0 ? "SEC \(filingCount)건" : "당일 SEC 없음")
+                } else {
+                    notes.append("희석 가능 양식 \(dilutionForms.joined(separator: "/"))")
+                }
+            } catch {
+                notes.append("SEC 조회 실패")
+            }
+        } else {
+            notes.append("SEC 이메일 없음")
+        }
+
+        return SupporterEvidenceSummary(
+            newsCount: newsCount,
+            filingCount: filingCount,
+            dilutionForms: dilutionForms.isEmpty ? nil : dilutionForms.joined(separator: ", "),
+            summary: notes.joined(separator: " · ")
         )
     }
 
@@ -449,9 +524,29 @@ actor MarketService {
         end: String,
         feed: LiveDataFeed
     ) async throws -> [AlpacaMinuteBar] {
+        try await alpacaSingleSymbolBars(
+            key: key,
+            secret: secret,
+            symbol: symbol,
+            start: start,
+            end: end,
+            feed: feed,
+            timeframe: "1Min"
+        )
+    }
+
+    private func alpacaSingleSymbolBars(
+        key: String,
+        secret: String,
+        symbol: String,
+        start: String,
+        end: String,
+        feed: LiveDataFeed,
+        timeframe: String
+    ) async throws -> [AlpacaMinuteBar] {
         var components = URLComponents(string: "https://data.alpaca.markets/v2/stocks/\(symbol)/bars")!
         components.queryItems = [
-            URLQueryItem(name: "timeframe", value: "1Min"),
+            URLQueryItem(name: "timeframe", value: timeframe),
             URLQueryItem(name: "start", value: start),
             URLQueryItem(name: "end", value: end),
             URLQueryItem(name: "limit", value: "10000"),
@@ -648,7 +743,7 @@ actor MarketService {
 
     private func secHeaders(email: String) -> [String: String] {
         [
-            "User-Agent": "CRT/0.11 taki5cm \(email)",
+            "User-Agent": "CRT/0.12 taki5cm \(email)",
             "Accept-Encoding": "gzip, deflate"
         ]
     }
@@ -756,6 +851,13 @@ private struct MinuteCandidate {
     let peakPrice: Double
     let move: Double
     let dollarVolume: Double
+}
+
+private struct SupporterEvidenceSummary {
+    let newsCount: Int
+    let filingCount: Int
+    let dilutionForms: String?
+    let summary: String
 }
 
 private struct MinuteBar {
